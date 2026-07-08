@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { AuthRequest, requireAuth } from "../middlewares/auth";
+import { wardrobeWriteRateLimit } from "../middlewares/writeRateLimit";
 import { getTenantId } from "../middlewares/tenant";
 import { db } from "@workspace/db";
 import {
@@ -178,7 +179,7 @@ router.get("/wardrobe/:id/reviews", requireAuth, async (req: AuthRequest, res) =
   res.json({ reviews: Array.isArray(raw) ? raw : [] });
 });
 
-router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
+router.post("/wardrobe", requireAuth, wardrobeWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
 
@@ -292,7 +293,7 @@ router.post("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
  * Display sizing of bottle images is purely client-side CSS; rebuild updates stored
  * URLs and profile fields, not bitmap dimensions in the browser.
  */
-router.post("/wardrobe/rebuild", requireAuth, async (req: AuthRequest, res) => {
+router.post("/wardrobe/rebuild", requireAuth, wardrobeWriteRateLimit, async (req: AuthRequest, res) => {
   const summary = await rebuildWardrobeForUser(getTenantId(req), req.user!.id);
   res.json(summary);
 });
@@ -338,7 +339,7 @@ async function findUserRow(tenantId: string, userId: string, idParam: string) {
   return rows[0] ?? null;
 }
 
-router.patch("/wardrobe/:fragranceId/visibility", requireAuth, async (req: AuthRequest, res) => {
+router.patch("/wardrobe/:fragranceId/visibility", requireAuth, wardrobeWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
 
@@ -375,7 +376,7 @@ router.patch("/wardrobe/:fragranceId/visibility", requireAuth, async (req: AuthR
  * similar day. Idempotent: always writes "now". Accepts an optional client
  * timestamp but clamps it to a sane window (no future, no ancient backdating).
  */
-router.patch("/wardrobe/:fragranceId/worn", requireAuth, async (req: AuthRequest, res) => {
+router.patch("/wardrobe/:fragranceId/worn", requireAuth, wardrobeWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
 
@@ -408,7 +409,7 @@ router.patch("/wardrobe/:fragranceId/worn", requireAuth, async (req: AuthRequest
   res.json({ id: fragranceId, lastWornAt });
 });
 
-router.patch("/wardrobe/detail-refresh/batch", requireAuth, async (req: AuthRequest, res) => {
+router.patch("/wardrobe/detail-refresh/batch", requireAuth, wardrobeWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
   const rawUpdates = Array.isArray(req.body?.updates) ? req.body.updates : [];
@@ -472,7 +473,7 @@ router.patch("/wardrobe/detail-refresh/batch", requireAuth, async (req: AuthRequ
  * Merge the latest bottle image from the global catalog / cache into this vault row.
  * Use after `/api/refresh-image` so the client does not rely on ephemeral local state.
  */
-router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
+router.patch("/wardrobe/:id", requireAuth, wardrobeWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
 
@@ -583,7 +584,7 @@ router.patch("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
   res.json({ ...hydrated, _dbId: match.id });
 });
 
-router.delete("/wardrobe/:id", requireAuth, async (req: AuthRequest, res) => {
+router.delete("/wardrobe/:id", requireAuth, wardrobeWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
 

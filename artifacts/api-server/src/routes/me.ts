@@ -2,7 +2,18 @@ import { Router } from "express";
 import { AuthRequest, isUndefinedColumnError, requireAuth } from "../middlewares/auth";
 import { getTenantId } from "../middlewares/tenant";
 import { db } from "@workspace/db";
-import { userFragrancesTable, userSettingsTable } from "@workspace/db/schema";
+import {
+  usersTable,
+  userFragrancesTable,
+  userSettingsTable,
+  pushSubscriptionsTable,
+  inAppNotificationsTable,
+  communityPostsTable,
+  communityCommentsTable,
+  communityReactionsTable,
+  communityVotesTable,
+  arenaCrowdPredictionsTable,
+} from "@workspace/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import { deriveAppState } from "../services/appStateCore";
 import { isAdminUser } from "../lib/adminAccess";
@@ -551,6 +562,113 @@ router.put("/me/scent-preferences", requireAuth, async (req: AuthRequest, res) =
       projectionPreference: projection === undefined ? null : projection,
     } satisfies ScentPreferencesDto,
   });
+});
+
+// ── Account data export + deletion (production-readiness: public-launch P0) ──
+// GDPR/CCPA-shaped self-service: a signed-in user can download everything we
+// hold for them and irreversibly delete their account. Both are strictly
+// user-scoped (keyed on req.user.id, populated by requireAuth).
+
+// A newer table (community/arena) may not exist on a lagging live DB. For the
+// read-only EXPORT we degrade a missing relation/column to an empty list rather
+// than 500 the whole download.
+function isMissingRelationOrColumn(err: unknown): boolean {
+  for (let cur = err, depth = 0; typeof cur === "object" && cur !== null && depth < 5; depth++) {
+    const code = (cur as { code?: string }).code;
+    if (code === "42P01" || code === "42703") return true; // undefined_table / undefined_column
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
+async function tolerantRows<T>(run: () => Promise<T[]>): Promise<T[]> {
+  try {
+    return await run();
+  } catch (err) {
+    if (isMissingRelationOrColumn(err)) return [];
+    throw err;
+  }
+}
+
+router.get("/me/export", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+
+  const [fragrances, settings, pushSubscriptions, notifications, posts, comments, reactions, votes] =
+    await Promise.all([
+      tolerantRows(() =>
+        db.select().from(userFragrancesTable).where(eq(userFragrancesTable.userId, user.id)),
+      ),
+      tolerantRows(() =>
+        db.select().from(userSettingsTable).where(eq(userSettingsTable.userId, user.id)),
+      ),
+      tolerantRows(() =>
+        db.select().from(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.userId, user.id)),
+      ),
+      tolerantRows(() =>
+        db.select().from(inAppNotificationsTable).where(eq(inAppNotificationsTable.userId, user.id)),
+      ),
+      tolerantRows(() =>
+        db.select().from(communityPostsTable).where(eq(communityPostsTable.userId, user.id)),
+      ),
+      tolerantRows(() =>
+        db.select().from(communityCommentsTable).where(eq(communityCommentsTable.userId, user.id)),
+      ),
+      tolerantRows(() =>
+        db.select().from(communityReactionsTable).where(eq(communityReactionsTable.userId, user.id)),
+      ),
+      tolerantRows(() =>
+        db.select().from(communityVotesTable).where(eq(communityVotesTable.userId, user.id)),
+      ),
+    ]);
+
+  res.setHeader("Content-Disposition", 'attachment; filename="scentcast-account-export.json"');
+  res.json({
+    exportedAt: new Date().toISOString(),
+    // Deliberately omits token / token_hash — an export must not leak the live
+    // bearer credential.
+    account: {
+      id: user.id,
+      email: user.email,
+      pictureUrl: user.pictureUrl ?? null,
+      createdAt: user.createdAt,
+    },
+    settings: settings[0] ?? null,
+    fragrances,
+    pushSubscriptions,
+    notifications,
+    community: { posts, comments, reactions, votes },
+  });
+});
+
+router.delete("/me", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  try {
+    // Atomic: either the whole account is removed or nothing is. Delete this
+    // user's rows child→parent, then the account row itself (whose ON DELETE
+    // CASCADE / SET NULL FKs clean up anything not explicitly handled, e.g. beam
+    // logs and the usage ledger).
+    await db.transaction(async (tx) => {
+      await tx.delete(communityReactionsTable).where(eq(communityReactionsTable.userId, user.id));
+      await tx.delete(communityVotesTable).where(eq(communityVotesTable.userId, user.id));
+      await tx.delete(communityCommentsTable).where(eq(communityCommentsTable.userId, user.id));
+      await tx
+        .delete(arenaCrowdPredictionsTable)
+        .where(eq(arenaCrowdPredictionsTable.userId, user.id));
+      // Deleting the user's posts cascades any remaining comments/reactions/votes
+      // OTHER users left on them (postId FKs).
+      await tx.delete(communityPostsTable).where(eq(communityPostsTable.userId, user.id));
+      await tx.delete(inAppNotificationsTable).where(eq(inAppNotificationsTable.userId, user.id));
+      await tx.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.userId, user.id));
+      await tx.delete(userSettingsTable).where(eq(userSettingsTable.userId, user.id));
+      await tx.delete(userFragrancesTable).where(eq(userFragrancesTable.userId, user.id));
+      await tx.delete(usersTable).where(eq(usersTable.id, user.id));
+    });
+  } catch (err) {
+    req.log.error({ err, userId: user.id }, "Account deletion failed");
+    res.status(500).json({ error: "Account deletion failed" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 export default router;

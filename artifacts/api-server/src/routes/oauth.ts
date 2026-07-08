@@ -4,9 +4,27 @@ import { db } from "@workspace/db";
 import { usersTable } from "@workspace/db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { getTenantId } from "../middlewares/tenant";
-import { requireAuth, type AuthRequest } from "../middlewares/auth";
+import { requireAuth, isUndefinedColumnError, type AuthRequest } from "../middlewares/auth";
+import { hashToken } from "../lib/tokenAuth";
+import { mintHandoffCode, redeemHandoffCode } from "../lib/oauthCodeStore";
+import { rateLimitMiddleware } from "../lib/rateLimit";
 
 const router = Router();
+
+// Per-IP limit on the auth surface (production-readiness C4). Guards the OAuth
+// start/callback/exchange/logout endpoints against brute-force and flood: the
+// exchange codes are already single-use + random, and logout rotates a token, so
+// this is DoS/abuse protection rather than a credential guard. Generous window,
+// env-overridable (a corporate NAT may need more) — a normal login is ~3 hits.
+const OAUTH_RATE_LIMIT = (() => {
+  const parsed = Number(process.env["OAUTH_RATE_LIMIT"]);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 20;
+})();
+const oauthRateLimit = rateLimitMiddleware({
+  name: "oauth",
+  limit: OAUTH_RATE_LIMIT,
+  windowMs: 10 * 60 * 1000,
+});
 
 type UserRow = typeof usersTable.$inferSelect;
 
@@ -202,6 +220,38 @@ async function ensureUserToken(
   return updated;
 }
 
+/**
+ * Backfill the token-hardening columns for the resolved user (production-
+ * readiness C1/C2). Stamps token_hash = SHA-256(token) so auth can authenticate
+ * by hash, sets token_issued_at on first stamp (coalesce keeps the original
+ * issue time on later logins), and refreshes token_last_used_at. This is the
+ * rolling backfill: every login stamps the row, so legacy plaintext-only rows
+ * gain a hash without a bulk migration. Best-effort — if the columns aren't on
+ * the live DB yet (42703) auth still works via the plaintext token fallback, so
+ * a stamp failure must never block login.
+ */
+async function stampTokenSecurity(user: UserRow, req: import("express").Request): Promise<UserRow> {
+  if (!user.token) return user;
+  const desiredHash = hashToken(user.token);
+  if (user.tokenHash === desiredHash && user.tokenIssuedAt) return user;
+  try {
+    const [updated] = await db
+      .update(usersTable)
+      .set({
+        tokenHash: desiredHash,
+        tokenIssuedAt: sql`coalesce(${usersTable.tokenIssuedAt}, now())`,
+        tokenLastUsedAt: sql`now()`,
+      })
+      .where(eq(usersTable.id, user.id))
+      .returning();
+    return updated ?? user;
+  } catch (err) {
+    if (!isUndefinedColumnError(err)) throw err;
+    req.log.warn({ userId: user.id }, "Skipping token_hash stamp — columns not migrated yet");
+    return user;
+  }
+}
+
 async function updateUserPictureBestEffort(
   userId: string,
   pictureUrl: string | null,
@@ -276,7 +326,7 @@ function constantTimeEqual(a: string, b: string): boolean {
   return timingSafeEqual(ab, bb);
 }
 
-router.get("/auth/google", (req, res) => {
+router.get("/auth/google", oauthRateLimit, (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) {
     res.status(503).json({ error: "Google OAuth is not configured" });
@@ -310,7 +360,7 @@ router.get("/auth/google", (req, res) => {
   res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
 });
 
-router.get("/auth/google/callback", async (req, res) => {
+router.get("/auth/google/callback", oauthRateLimit, async (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -427,21 +477,22 @@ router.get("/auth/google/callback", async (req, res) => {
     }
 
     user = await ensureUserToken(user, req);
+    user = await stampTokenSecurity(user, req);
     await updateUserPictureBestEffort(user.id, pictureUrl, req);
 
     if (!user.token) {
       throw new Error("OAuth callback resolved user without token/email");
     }
 
-    const params = new URLSearchParams({
-      oauth_token: user.token,
-      oauth_email: user.email,
+    // C3: hand the SPA a single-use 60s code instead of the bearer token +
+    // email in the redirect URL, so the live credential never lands in history,
+    // Referer, or SPA-origin logs. The SPA POSTs it to /api/auth/exchange.
+    const handoffCode = mintHandoffCode({
+      token: user.token,
+      email: user.email,
+      ...(pictureUrl ? { pictureUrl } : {}),
     });
-    if (pictureUrl) {
-      params.set("oauth_picture", pictureUrl);
-    }
-
-    res.redirect(`/?${params}`);
+    res.redirect(`/?oauth_code=${encodeURIComponent(handoffCode)}`);
   } catch (err) {
     req.log.error(
       { err, query: req.query, resolvedBaseUrl: getBaseUrl(req) },
@@ -458,19 +509,64 @@ router.get("/auth/google/callback", async (req, res) => {
  * invalidates the old token everywhere. Best-effort and idempotent — the client
  * clears local state regardless of the response.
  */
-router.post("/auth/logout", requireAuth, async (req: AuthRequest, res) => {
+router.post("/auth/logout", oauthRateLimit, requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
+  const nextToken = randomUUID();
   try {
+    // Rotate the hash alongside the plaintext token. Skipping token_hash would
+    // leave the OLD hash live — auth's hash-first lookup would keep accepting the
+    // logged-out credential, defeating server-side sign-out.
     await db
       .update(usersTable)
-      .set({ token: randomUUID() })
+      .set({
+        token: nextToken,
+        tokenHash: hashToken(nextToken),
+        tokenIssuedAt: sql`now()`,
+        tokenLastUsedAt: sql`now()`,
+      })
       .where(eq(usersTable.id, user.id));
   } catch (err) {
-    req.log.error({ err, userId: user.id }, "Failed to rotate token on logout");
-    res.status(500).json({ error: "Logout failed" });
-    return;
+    if (!isUndefinedColumnError(err)) {
+      req.log.error({ err, userId: user.id }, "Failed to rotate token on logout");
+      res.status(500).json({ error: "Logout failed" });
+      return;
+    }
+    // Live DB without the token-hash columns yet: rotate the plaintext token
+    // only. The old token still dies (plaintext lookup no longer matches) and no
+    // stale hash exists to accept it.
+    try {
+      await db.update(usersTable).set({ token: nextToken }).where(eq(usersTable.id, user.id));
+    } catch (fallbackErr) {
+      req.log.error({ err: fallbackErr, userId: user.id }, "Failed to rotate token on logout");
+      res.status(500).json({ error: "Logout failed" });
+      return;
+    }
   }
   res.json({ ok: true });
+});
+
+/**
+ * C3: exchange a one-time handoff code (minted by the OAuth callback) for the
+ * bearer token + email. Single-use and 60s-lived (enforced by the store), so a
+ * leaked redirect URL is worthless. The token is returned in the response body,
+ * never in a URL. A rate limit is applied at mount (routes/index.ts).
+ */
+router.post("/auth/exchange", oauthRateLimit, (req, res) => {
+  const code = typeof req.body?.code === "string" ? req.body.code : "";
+  if (!code) {
+    res.status(400).json({ error: "Missing code" });
+    return;
+  }
+  const handoff = redeemHandoffCode(code);
+  if (!handoff) {
+    res.status(401).json({ error: "Invalid or expired code" });
+    return;
+  }
+  res.json({
+    token: handoff.token,
+    email: handoff.email,
+    ...(handoff.pictureUrl ? { picture: handoff.pictureUrl } : {}),
+  });
 });
 
 export default router;
