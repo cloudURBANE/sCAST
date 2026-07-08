@@ -55,7 +55,7 @@ jobs:
       # honored. pnpm/action-setup above runs first so the store path resolves.
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -83,7 +83,7 @@ jobs:
       # honored. pnpm/action-setup above runs first so the store path resolves.
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
