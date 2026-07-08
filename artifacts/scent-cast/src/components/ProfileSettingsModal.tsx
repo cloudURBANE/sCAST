@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { m, AnimatePresence } from 'framer-motion';
 import { SCENT_EASE_OUT_EXPO } from '@/lib/motion';
-import { BellRing, Check, CloudSun, Languages, LocateFixed, LoaderCircle, Palette, UserRound, X } from 'lucide-react';
+import { BellRing, Check, CloudSun, Download, Languages, LocateFixed, LoaderCircle, Palette, ShieldAlert, Trash2, UserRound, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useWeather } from '@/context/WeatherContext';
+import { useAuth } from '@/context/AuthContext';
 import { useTheme, type AccentName, type ThemeMode } from '@/context/ThemeContext';
 import { useTranslation, LOCALE_LABELS, DELIVERED_LOCALES, type Locale } from '@/i18n';
 import { savePreferences } from '@/lib/preferences';
@@ -150,6 +151,9 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const { weather, weatherLoading, locationStatus, locationSource, requestLocation } = useWeather();
   const { t, locale, setLocale } = useTranslation();
   const { theme, accent, setTheme, setAccent } = useTheme();
+  const { handleSignOut } = useAuth();
+  const [dataBusy, setDataBusy] = useState<'idle' | 'exporting' | 'deleting'>('idle');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -360,6 +364,53 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const showPushSection =
     Boolean(authToken) &&
     (pushState === 'on' || pushState === 'off' || pushState === 'denied' || iosNeedsInstall);
+
+  // Download everything the account holds (GET /api/me/export) as a JSON file.
+  const handleExportData = async () => {
+    if (!authToken || dataBusy !== 'idle') return;
+    setDataBusy('exporting');
+    try {
+      const res = await fetch('/api/me/export', {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) throw new Error('export_failed');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'scentcast-account-export.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: 'Export ready', description: 'Your data has been downloaded.' });
+    } catch {
+      toast({ title: 'Export failed', description: 'Could not export your data. Please try again.' });
+    } finally {
+      setDataBusy('idle');
+    }
+  };
+
+  // Irreversibly delete the account (DELETE /api/me), then sign out locally.
+  const handleDeleteAccount = async () => {
+    if (!authToken || dataBusy !== 'idle') return;
+    setDataBusy('deleting');
+    try {
+      const res = await fetch('/api/me', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) throw new Error('delete_failed');
+      // Clears the token/email/picture from storage and resets to signed-out
+      // state. The logout call it fires 401s post-deletion — harmless (best-effort).
+      handleSignOut();
+      onClose();
+    } catch {
+      toast({ title: 'Deletion failed', description: 'Could not delete your account. Please try again.' });
+      setDataBusy('idle');
+      setConfirmingDelete(false);
+    }
+  };
 
   return (
     <AnimatePresence>
@@ -671,6 +722,76 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                           {t('notifications.privacyNote')}
                         </p>
                       </>
+                    )}
+                  </section>
+                )}
+
+                {authToken && (
+                  <section className="rounded-[12px] border border-white/10 bg-white/[0.025] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <div className="mb-4 flex items-center gap-3">
+                      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/[0.08] text-scent-accent">
+                        <ShieldAlert size={16} aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0">
+                        <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-[#fff7ec]">Data &amp; account</h3>
+                        <p className="mt-0.5 text-[11px] text-white/35">Download your data, or permanently delete your account.</p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => void handleExportData()}
+                      disabled={dataBusy !== 'idle'}
+                      className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 py-3 text-[13px] font-bold uppercase tracking-[0.16em] text-white/80 transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {dataBusy === 'exporting' ? (
+                        <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Download size={15} strokeWidth={2} aria-hidden="true" />
+                      )}
+                      {dataBusy === 'exporting' ? 'Preparing…' : 'Export my data'}
+                    </button>
+
+                    {!confirmingDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingDelete(true)}
+                        disabled={dataBusy !== 'idle'}
+                        className="mt-2 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-red-500/30 bg-red-500/[0.06] px-4 py-3 text-[13px] font-bold uppercase tracking-[0.16em] text-red-300 transition-colors hover:bg-red-500/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 disabled:opacity-60"
+                      >
+                        <Trash2 size={15} strokeWidth={2} aria-hidden="true" />
+                        Delete my account
+                      </button>
+                    ) : (
+                      <div className="mt-2 rounded-[10px] border border-red-500/30 bg-red-500/[0.06] p-3">
+                        <p className="text-[11px] leading-snug text-white/70">
+                          This permanently deletes your wardrobe, settings, and community posts. This
+                          cannot be undone.
+                        </p>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingDelete(false)}
+                            disabled={dataBusy === 'deleting'}
+                            className="inline-flex min-h-11 flex-1 items-center justify-center rounded-full border border-white/15 bg-white/[0.04] px-3 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-white/70 transition-colors hover:bg-white/[0.08] disabled:opacity-60"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteAccount()}
+                            disabled={dataBusy === 'deleting'}
+                            className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border border-red-500/40 bg-red-500/80 px-3 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-white transition-colors hover:bg-red-500 disabled:cursor-wait disabled:opacity-70"
+                          >
+                            {dataBusy === 'deleting' ? (
+                              <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+                            ) : (
+                              <Trash2 size={14} strokeWidth={2} aria-hidden="true" />
+                            )}
+                            {dataBusy === 'deleting' ? 'Deleting…' : 'Delete forever'}
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </section>
                 )}
