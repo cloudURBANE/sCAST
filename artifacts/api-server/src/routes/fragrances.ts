@@ -50,6 +50,25 @@ type SourceDetailCacheEntry = {
 
 const sourceDetailCache = new Map<string, SourceDetailCacheEntry>();
 
+// Every distinct source_url ever posted to POST /api/fragrances/details would
+// otherwise accumulate for the process lifetime — eviction was lazy-on-read
+// only, so a URL fetched once and never re-requested was never removed. Bound
+// it with oldest-key eviction on insert of a NEW key, mirroring
+// writeWeatherCache/cityLabelCache. Re-setting an existing key (pending -> ready
+// /failed transition) keeps its slot and does not evict an unrelated entry.
+const SOURCE_DETAIL_CACHE_LIMIT = 500;
+
+function writeSourceDetailCache(cacheKey: string, entry: SourceDetailCacheEntry): void {
+  if (
+    !sourceDetailCache.has(cacheKey) &&
+    sourceDetailCache.size >= SOURCE_DETAIL_CACHE_LIMIT
+  ) {
+    const oldest = sourceDetailCache.keys().next().value;
+    if (oldest !== undefined) sourceDetailCache.delete(oldest);
+  }
+  sourceDetailCache.set(cacheKey, entry);
+}
+
 function canonicalSourceUrl(value: string): string {
   try {
     const parsed = new URL(value.trim());
@@ -466,7 +485,7 @@ function queueSourceDetailEnrichment(input: {
   const existing = getCachedSourceDetail(input.cacheKey);
   if (existing?.status === "pending") return;
 
-  sourceDetailCache.set(input.cacheKey, {
+  writeSourceDetailCache(input.cacheKey, {
     status: "pending",
     detail: input.provisional,
     expiresAt: Date.now() + SOURCE_DETAIL_CACHE_TTL_MS,
@@ -474,7 +493,7 @@ function queueSourceDetailEnrichment(input: {
 
   void buildEnrichedSourceDetail(input)
     .then((detail) => {
-      sourceDetailCache.set(input.cacheKey, {
+      writeSourceDetailCache(input.cacheKey, {
         status: "ready",
         detail,
         expiresAt: Date.now() + SOURCE_DETAIL_CACHE_TTL_MS,
@@ -482,7 +501,7 @@ function queueSourceDetailEnrichment(input: {
     })
     .catch((err) => {
       logger.warn({ err, sourceUrl: input.sourceUrl }, "fragrance source detail background enrichment failed");
-      sourceDetailCache.set(input.cacheKey, {
+      writeSourceDetailCache(input.cacheKey, {
         status: "failed",
         detail: {
           ...input.provisional,
