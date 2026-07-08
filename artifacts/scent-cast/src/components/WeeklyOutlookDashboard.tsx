@@ -424,7 +424,7 @@ function ForecastHero({
                 // 360px instead of line-clamp cutting the joined string mid-way
                 // and stranding a "Bergamot ·…" dangling-separator ellipsis on
                 // SE-class screens. Wider viewports see the identical joined line.
-                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.8rem,3vw,1.05rem)] italic leading-snug text-scent-accent/95 sm:mt-2 md:mt-2.5 md:text-[clamp(1rem,1.7vw,1.2rem)]">
+                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.9rem,3.1vw,1.1rem)] italic leading-snug text-scent-accent sm:mt-2 md:mt-2.5 md:text-[clamp(1rem,1.7vw,1.2rem)]">
                   {notes.map((note, index) => (
                     <span key={note} className={index >= 2 ? 'hidden min-[360px]:inline' : undefined}>
                       {index > 0 ? ' · ' : ''}
@@ -607,7 +607,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   The leading accent day token ("TODAY" / "SUN") pins the pill to
                   the SELECTED forecast day, so its weather can never read as
                   contradicting the current-conditions marquee up top. */}
-              <div className="forecast-meta-pill inline-flex items-center gap-2 px-3.5 py-1.5 text-scent-text-secondary md:gap-2.5 md:px-5 md:py-2">
+              <div className="forecast-meta-pill inline-flex items-center gap-2 px-3 py-1 text-scent-text-secondary md:gap-2.5 md:px-4 md:py-1.5">
                 <span className="flex items-center text-scent-accent/75" aria-hidden>
                   <WeatherGlyph day={activePlan.day} size={14} />
                 </span>
