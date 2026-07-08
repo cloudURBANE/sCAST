@@ -1126,23 +1126,24 @@ function DashboardView() {
             min-height + padding relax to the original stacked rhythm. The Vault of
             Aromas is no longer part of this screen — it lives one scroll down as
             the "second page". */}
-        <div className="flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+0.5rem)] sm:min-h-0 sm:gap-8 sm:pt-0 sm:pb-0 lg:gap-10">
+        <div className={`flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+1.5rem)] sm:min-h-0 sm:gap-8 sm:pt-0 sm:pb-0 lg:gap-10 ${agentActive ? '' : 'justify-between sm:justify-start'}`}>
           {/* The hero ticker sits flush against the fixed top bar (no padding
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
 
-          {/* Phone-only vertical centering of the primary content. On a tall
-              phone the stacked content is shorter than the viewport, leaving
-              slack that — dumped all at the bottom — read as a dead void between
-              the calendar and the nav, and — split by the old my-auto — read as a
-              gap above the forecast. flex-1 claims the space below the pinned
-              ticker and justify-center seats search → stat → forecast as ONE
-              optically centered composition, so the leftover splits into balanced
-              top/bottom breathing room instead of one hole. `sm:contents`
-              dissolves this wrapper on sm+ so the children rejoin the column's
-              original gap-8 flow untouched. In agent mode it top-anchors so the
-              opening panel doesn't float. */}
-          <div className={`flex min-w-0 flex-1 flex-col gap-4 sm:contents ${agentActive ? 'justify-start' : 'justify-center'}`}>
+          {/* Passthrough wrapper (`display:contents`) so its children — search,
+              stat, forecast — become DIRECT flex children of the column and share
+              in the column's `justify-between` distribution (mobile only). On a
+              tall phone the stacked content is shorter than the viewport; rather
+              than pooling that slack into ONE dead gap (all-at-bottom read as a
+              void before the nav; my-auto read as a void above the forecast;
+              full centering read as a void between the ticker and the search),
+              justify-between spreads it into several small, EVEN gaps between the
+              ticker, search, stat, and forecast — consistent rhythm instead of a
+              hole — while the ticker stays flush at the top and the calendar
+              anchors just above the nav. sm:justify-start on the column restores
+              the untouched desktop flow. */}
+          <div className="contents">
           {/* 52rem matches every sibling in this column (mission header, the
               Discover CTA that "shares the exact box" of the card, atmosphere
               bar, forecast), so the card edges align down the whole stack on
