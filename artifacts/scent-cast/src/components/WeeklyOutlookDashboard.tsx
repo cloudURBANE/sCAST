@@ -611,13 +611,14 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               calendar rather than drifting beside the title. */}
           {activeMeta.length > 0 ? (
             <div className="mt-[var(--fc-hero-pill)] flex justify-center">
-              {/* .forecast-meta-pill carries the shared near-black + gold-hairline
-                  material; the glyph takes the accent tint (like an active tile's
-                  glyph) so the pill's one pictorial element ties it to the rail.
-                  The leading accent day token ("TODAY" / "SUN") pins the pill to
-                  the SELECTED forecast day, so its weather can never read as
+              {/* .forecast-meta-pill is now frameless (see index.css) — a plain
+                  inline caption, no border/fill/padding, so it reads as quiet
+                  supporting data rather than a loud bordered control. The glyph
+                  takes the accent tint (like an active tile's glyph) and the
+                  leading accent day token ("TODAY" / "SUN") pins the line to the
+                  SELECTED forecast day, so its weather can never read as
                   contradicting the current-conditions marquee up top. */}
-              <div className="forecast-meta-pill inline-flex items-center gap-2 px-3 py-1 text-scent-text-secondary md:gap-2.5 md:px-4 md:py-1.5">
+              <div className="forecast-meta-pill inline-flex items-center gap-2 text-scent-text-secondary md:gap-2.5">
                 <span className="flex items-center text-scent-accent/75" aria-hidden>
                   <WeatherGlyph day={activePlan.day} size={14} />
                 </span>
@@ -637,7 +638,11 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               lines so it stays optically centered and always fits the forecast
               column without ever crowding the day rail below. */}
           {activeReason ? (
-            <p className="mx-auto mt-[var(--fc-hero-pill)] max-w-[28rem] px-4 text-center font-serif text-[clamp(0.84rem,3.2vw,1rem)] italic leading-snug text-balance line-clamp-2 text-scent-text-secondary md:max-w-[32rem] md:text-[clamp(0.96rem,1.55vw,1.12rem)]">
+            // Brighter (was text-scent-text-secondary) and a touch larger so the
+            // "why this bottle today" line is legible on a real phone outdoors —
+            // it was soft enough to skip. Italic serif + smaller-than-name keeps
+            // it clearly supporting copy despite the lift in contrast.
+            <p className="mx-auto mt-[var(--fc-hero-pill)] max-w-[28rem] px-4 text-center font-serif text-[clamp(0.9rem,3.3vw,1.05rem)] italic leading-snug text-balance line-clamp-2 text-scent-text-primary md:max-w-[32rem] md:text-[clamp(0.98rem,1.6vw,1.14rem)]">
               {activeReason}
             </p>
           ) : null}
@@ -696,7 +701,7 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       type="button"
       onClick={onClick}
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
-      className="forecast-chevron flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/60 hover:text-scent-gold-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 md:h-[3.25rem] md:w-[3.25rem]"
+      className="forecast-chevron flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/70 hover:text-scent-gold-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 md:h-[3.25rem] md:w-[3.25rem]"
     >
       <Icon size={22} strokeWidth={1.5} aria-hidden className="md:h-[26px] md:w-[26px]" />
     </button>
