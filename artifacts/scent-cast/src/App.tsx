@@ -1349,20 +1349,21 @@ function DashboardView() {
               above it. Normal flow on md+. Hidden in agent mode (it takes over the
               hero). */}
           {!agentActive ? (
-            // SPLIT the leftover column space evenly above AND below the forecast
-            // (my-auto), so the module sits naturally seated — a controlled, equal
-            // breathing band on each side — instead of being shoved up with one
-            // giant void below (mb-auto, which produced the "huge gap before nav")
-            // or shoved down with a void above (mt-auto). The module's own scale +
-            // --fc-* rhythm carry the section; my-auto only distributes the small
-            // remainder. The column pb still holds nav clearance. md+ unchanged.
-            <div className="my-auto sm:my-0">
-              <WeeklyOutlookDashboard
-                items={items}
-                weather={weather}
-                onSelectFragrance={openFragranceDetail}
-              />
-            </div>
+            // Follow the column's natural gap rhythm — the forecast sits one
+            // consistent step below the atmosphere/stat row, same as every other
+            // gap in the stack, so the page reads as one locked spacing system.
+            // The earlier my-auto centered the module in the leftover viewport
+            // space, which on tall phones opened a "dead zone" ABOVE the forecast
+            // title (the reported too-large gap before "Scent Forecast"). Letting
+            // the stack top-anchor sends any remainder to the BOTTOM instead,
+            // where it reads as calm breathing room in front of the floating nav
+            // pill rather than a void mid-page. The column pb still holds nav
+            // clearance regardless of overflow. md+ is unchanged.
+            <WeeklyOutlookDashboard
+              items={items}
+              weather={weather}
+              onSelectFragrance={openFragranceDetail}
+            />
           ) : null}
         </div>
 
