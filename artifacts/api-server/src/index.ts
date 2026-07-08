@@ -4,6 +4,7 @@ import "./env-bootstrap";
 import type { Server } from "node:http";
 import sharp from "sharp";
 import { pool } from "@workspace/db";
+import { runMigrations } from "@workspace/db/migrate";
 import app from "./app";
 import { logger } from "./lib/logger";
 import {
@@ -63,9 +64,25 @@ async function start() {
   announceRedisMode();
   if (isRedisConfigured()) void getRedis();
 
+  // Versioned migrations at boot (E1). Opt-in: Railway's plan has no separate
+  // release phase, so the deploy step runs here, before the healthcheck-gated
+  // traffic cutover. Safe today because numReplicas is 1 (no concurrent
+  // migrators); drizzle's migrator also takes an advisory lock as a backstop.
+  // A failed migration refuses to serve — the readiness gate keeps the old
+  // instance live.
+  if (process.env["RUN_MIGRATIONS_ON_BOOT"] === "true") {
+    try {
+      await runMigrations();
+      logger.info("Database migrations applied");
+    } catch (err) {
+      logger.error({ err }, "Database migration failed; refusing to serve");
+      process.exit(1);
+    }
+  }
+
   // Self-heal the tenant baseline before serving: create the default tenant and
-  // backfill any pre-tenant rows. This removes the need to hand-run a migration
-  // in a precise order — the app converges every boot.
+  // backfill any pre-tenant rows. Kept as defense-in-depth alongside versioned
+  // migrations — it converges every boot regardless of migration state.
   try {
     await ensureTenantBaseline();
   } catch (err) {
