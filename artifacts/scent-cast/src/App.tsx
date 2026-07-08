@@ -24,6 +24,7 @@ import { Toaster } from './components/ui/toaster';
 import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
 import { ErrorBoundary, RouteErrorFallback } from './components/ErrorBoundary';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { toast } from '@/hooks/use-toast';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
 import { useCalmMotion } from '@/hooks/useCalmMotion';
 import { SCENT_EASE_OUT_EXPO } from '@/lib/motion';
@@ -700,6 +701,7 @@ function DashboardView() {
     setActiveRecommendation,
     setActiveEngineRecommendation,
     setRecommendationReason,
+    markFragranceWorn,
     handleAddItem,
     handlePersistWardrobeImage,
     handleVerifyWardrobeFact,
@@ -1493,7 +1495,22 @@ function DashboardView() {
               className="px-5 pt-3 shrink-0 border-t border-white/5"
               style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
             >
-              <button type="button" onClick={closeRecommendationOverlay} className="w-full py-4 bg-scent-accent text-black scent-type-chip hover:opacity-90 transition-opacity active:scale-[0.98]">
+              <button
+                type="button"
+                onClick={() => {
+                  // Confirming the pick IS wearing it: stamp lastWornAt so the
+                  // recency penalty rotates tomorrow's pick off this bottle. The
+                  // X in the top bar stays a pure dismiss (no wear logged).
+                  const picked = activeRecommendation;
+                  void markFragranceWorn(picked);
+                  toast({
+                    title: 'Logged for today',
+                    description: `We'll rest ${picked.name} and rotate tomorrow's pick.`,
+                  });
+                  closeRecommendationOverlay();
+                }}
+                className="w-full py-4 bg-scent-accent text-black scent-type-chip hover:opacity-90 transition-opacity active:scale-[0.98]"
+              >
                 Confirm Alignment
               </button>
             </div>
