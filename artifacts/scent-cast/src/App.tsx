@@ -1131,6 +1131,18 @@ function DashboardView() {
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
 
+          {/* Phone-only vertical centering of the primary content. On a tall
+              phone the stacked content is shorter than the viewport, leaving
+              slack that — dumped all at the bottom — read as a dead void between
+              the calendar and the nav, and — split by the old my-auto — read as a
+              gap above the forecast. flex-1 claims the space below the pinned
+              ticker and justify-center seats search → stat → forecast as ONE
+              optically centered composition, so the leftover splits into balanced
+              top/bottom breathing room instead of one hole. `sm:contents`
+              dissolves this wrapper on sm+ so the children rejoin the column's
+              original gap-8 flow untouched. In agent mode it top-anchors so the
+              opening panel doesn't float. */}
+          <div className={`flex min-w-0 flex-1 flex-col gap-4 sm:contents ${agentActive ? 'justify-start' : 'justify-center'}`}>
           {/* 52rem matches every sibling in this column (mission header, the
               Discover CTA that "shares the exact box" of the card, atmosphere
               bar, forecast), so the card edges align down the whole stack on
@@ -1365,6 +1377,7 @@ function DashboardView() {
               onSelectFragrance={openFragranceDetail}
             />
           ) : null}
+          </div>
         </div>
 
         {/* Page two: the Vault of Aromas, reached by scrolling one screen down
