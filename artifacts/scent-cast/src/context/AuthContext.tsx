@@ -219,6 +219,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setGuestPromptDismissed(false);
     setGuestModeActive(false);
     setGuestModeAcknowledged(false);
+    // Evict any api-data the service worker cached under a *previous* user. The
+    // `api-data` NetworkFirst cache is keyed by URL only (no Authorization
+    // variance), so on a shared/installed PWA a fresh sign-in would otherwise
+    // inherit the prior user's wardrobe/profile and serve it whenever the
+    // network stalls past the 6s timeout. handleSignOut clears it too, but a new
+    // user can reach handleAuth without a preceding local sign-out.
+    clearPwaApiCache();
   }, [setGuestPromptDismissed, setGuestModeAcknowledged]);
 
   const handleSignOut = useCallback(() => {
