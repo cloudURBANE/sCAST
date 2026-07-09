@@ -1,0 +1,14 @@
+# Code ownership for review routing. GitHub requests a review from the matching
+# owner when a PR touches these paths. Last matching pattern wins.
+
+# Default owner for everything.
+*                       @cloudURBANE
+
+# Deployment infrastructure and CI — higher-blast-radius changes.
+/infra/                 @cloudURBANE
+/.github/               @cloudURBANE
+/Dockerfile             @cloudURBANE
+/railway.json           @cloudURBANE
+
+# Database schema and migrations — a bad change here can touch a shared DB.
+/lib/db/                @cloudURBANE
