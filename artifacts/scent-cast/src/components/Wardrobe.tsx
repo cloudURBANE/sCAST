@@ -2048,11 +2048,15 @@ export const Wardrobe: React.FC<{
   return (
     <div className="relative">
       <div className="space-y-8 sm:space-y-10 relative z-10">
-        <div className="flex flex-col items-center justify-center text-center gap-5 sm:gap-6">
+        <div className="flex flex-col items-center justify-center text-center gap-7 sm:gap-8">
           {/* Header block: title, one-line purpose, live count badge. The old
               full-bleed divider line with "0 Entries" perched on it read as a
-              template flourish; a compact badge keeps the count useful. */}
-          <div className="space-y-4">
+              template flourish; a compact badge keeps the count useful.
+              Internal spacing tightened (was space-y-4) so title + subline +
+              count pill read as ONE composed unit; the outer gap was widened in
+              turn (gap-5→gap-7) to make a clear break before the search input,
+              instead of every row sitting on near-equal spacing (scattered). */}
+          <div className="space-y-2.5">
             <h2 className="font-serif italic text-[clamp(2.4rem,6.5vw,4.25rem)] text-foreground tracking-normal leading-none">Vault of Aromas</h2>
             <p className="mx-auto max-w-md text-[15px] leading-relaxed text-scent-text-muted sm:text-base">
               Your collection — the signal behind every recommendation.

@@ -418,7 +418,11 @@ function ForecastHero({
                 downward shift seats brand/name/notes against the bottle's real
                 optical center so the two halves lock as one unit. */}
             <div className="flex min-w-0 w-[46%] max-w-[12.5rem] translate-y-[0.3rem] flex-col items-center justify-center self-center text-center sm:w-[48%] sm:max-w-[14rem] sm:translate-y-[0.45rem] md:max-w-[20rem] md:translate-y-[0.6rem]">
-              <p className="scent-type-label text-[10px] tracking-[0.3em] text-scent-accent/80 [text-indent:0.3em] sm:text-[12px] md:text-[13px]">
+              {/* text-balance + tighter phone tracking so a long house name
+                  ("DOLCE & GABBANA") composes as two even centered lines
+                  instead of one ragged break; sm+ keeps the original size and
+                  0.3em spacing untouched. */}
+              <p className="scent-type-label text-balance text-[10px] tracking-[0.22em] text-scent-accent/80 [text-indent:0.22em] sm:text-[12px] sm:tracking-[0.3em] sm:[text-indent:0.3em] md:text-[13px]">
                 {pick.brand}
               </p>
               {/* Name sized one notch smaller with tighter leading (was
