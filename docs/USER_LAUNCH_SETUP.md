@@ -66,6 +66,16 @@ first and falls back to the plaintext `token` column, and every login backfills
 the hash for that row. So the app works immediately after the migration with no
 bulk backfill.
 
+**Then adopt the versioned-migration journal** (one-time): verify the live
+schema matches the head of `lib/db/migrations/` (spot-check the `users`
+token-hash columns), then stamp it as applied —
+`ALLOW_MIGRATION_STAMP=yes DATABASE_URL=<prod> pnpm --filter @workspace/db run migrate:stamp`.
+From then on every schema change ships as a reviewed SQL file in
+`lib/db/migrations/` (CI fails schema edits that arrive without one) and is
+applied with `pnpm --filter @workspace/db run migrate` — or automatically at
+deploy by setting `RUN_MIGRATIONS_ON_BOOT=true` on the Railway api-server
+service. Details: `lib/db/migrations/pre-baseline/README.md`.
+
 **Follow-up (after ≥1 release of dual-read), scripted and documented separately:**
 
 1. Backfill `token_hash` for any rows that haven't logged in:

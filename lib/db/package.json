@@ -9,6 +9,9 @@
   },
   "scripts": {
     "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "generate": "drizzle-kit generate --config ./drizzle.config.ts",
+    "migrate": "node --experimental-strip-types ./src/migrate.ts",
+    "migrate:stamp": "node --experimental-strip-types ./src/migrate.ts --stamp",
     "push": "node ./scripts/preflight-push.mjs && drizzle-kit push --config ./drizzle.config.ts",
     "push-force": "node ./scripts/preflight-push.mjs && drizzle-kit push --force --config ./drizzle.config.ts"
   },

@@ -1,3 +1,7 @@
+-- pg_trgm backs the trigram search indexes below (same extension the hand-SQL
+-- era enabled in supabase/migrations/20260605120000). IF NOT EXISTS keeps this
+-- a no-op on databases where it is already on.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
 CREATE TYPE "public"."community_post_type" AS ENUM('question', 'sotd', 'battle', 'worth_it');--> statement-breakpoint
 CREATE TYPE "public"."community_reaction_target_type" AS ENUM('post', 'comment');--> statement-breakpoint
 CREATE TABLE "tenants" (

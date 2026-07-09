@@ -21,6 +21,24 @@ function parseSslMode(url: string): string | null {
 }
 
 /**
+ * Strip pg's SSL query params from a connection string. node-postgres parses
+ * sslmode from connectionString AFTER spreading the config object, which would
+ * overwrite an explicit `ssl` override — so when we pass one, the URL must not
+ * carry its own SSL directives.
+ */
+export function stripPgSslParams(url: string): string {
+  try {
+    const parsed = new URL(url);
+    for (const key of ["ssl", "sslmode", "sslcert", "sslkey", "sslrootcert"]) {
+      parsed.searchParams.delete(key);
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+/**
  * Resolve the CA material from DATABASE_SSL_CA. Two forms:
  * - inline PEM (contains "-----BEGIN"), with literal \n escapes allowed so the
  *   whole cert fits in a single-line env var (same convention as

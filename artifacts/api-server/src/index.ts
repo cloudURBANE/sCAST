@@ -2,8 +2,10 @@
 // so dotenv side effects live in this dependency-free module.
 import "./env-bootstrap";
 import type { Server } from "node:http";
+import path from "node:path";
 import sharp from "sharp";
-import { pool } from "@workspace/db";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
+import { db, pool } from "@workspace/db";
 import app from "./app";
 import { logger } from "./lib/logger";
 import {
@@ -62,6 +64,36 @@ async function start() {
   // outcome is logged at boot rather than racing the first request.
   announceRedisMode();
   if (isRedisConfigured()) void getRedis();
+
+  // Versioned migrations as a deploy step (production-readiness E1). Opt-in via
+  // RUN_MIGRATIONS_ON_BOOT=true so platforms without a release phase (Railway)
+  // apply pending lib/db/migrations/ before traffic cutover. Boot-time is safe
+  // while numReplicas=1 (railway.json) — no concurrent migrators; revisit with
+  // a release-phase job or advisory lock before scaling out. A migration
+  // failure refuses to serve: wrong-schema traffic is worse than a failed
+  // deploy, and the readiness probe keeps the previous instance in rotation.
+  if (process.env["RUN_MIGRATIONS_ON_BOOT"] === "true") {
+    try {
+      // Not cwd-relative: `pnpm --filter @workspace/api-server run start` (and
+      // Railway's `pnpm start`) run with cwd = artifacts/api-server, not the
+      // repo root, so a cwd-relative guess breaks. esbuild bundles this file to
+      // artifacts/api-server/dist/index.mjs, so import.meta.dirname is stable
+      // there regardless of invocation cwd; walk up three levels (dist →
+      // api-server → artifacts → repo root) to lib/db/migrations.
+      const migrationsFolder =
+        process.env["MIGRATIONS_DIR"] ??
+        path.resolve(import.meta.dirname, "../../../lib/db/migrations");
+      const before = Date.now();
+      await migrate(db, { migrationsFolder });
+      logger.info(
+        { migrationsFolder, ms: Date.now() - before },
+        "Database migrations up to date",
+      );
+    } catch (err) {
+      logger.error({ err }, "Migration run failed; refusing to serve");
+      process.exit(1);
+    }
+  }
 
   // Self-heal the tenant baseline before serving: create the default tenant and
   // backfill any pre-tenant rows. This removes the need to hand-run a migration

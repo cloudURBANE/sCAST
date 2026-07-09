@@ -1,7 +1,7 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "./schema";
-import { resolveSslConfig } from "./sslConfig";
+import { resolveSslConfig, stripPgSslParams } from "./sslConfig";
 
 const { Pool } = pg;
 const databaseUrl = process.env.DATABASE_URL;
@@ -10,18 +10,6 @@ if (!databaseUrl) {
   throw new Error(
     "DATABASE_URL must be set. Did you forget to provision a database?",
   );
-}
-
-function stripPgSslParams(url: string): string {
-  try {
-    const parsed = new URL(url);
-    for (const key of ["ssl", "sslmode", "sslcert", "sslkey", "sslrootcert"]) {
-      parsed.searchParams.delete(key);
-    }
-    return parsed.toString();
-  } catch {
-    return url;
-  }
 }
 
 // TLS verification policy lives in sslConfig.ts (pure + unit-tested).
