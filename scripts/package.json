@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
-    "dotenv": "^16.6.1",
+    "dotenv": "^17.4.2",
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {

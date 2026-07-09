@@ -1,0 +1,91 @@
+{
+  "_contract": "Cross-service source_coverage contract fixtures (readiness gap X2). This file is committed BYTE-IDENTICAL in two repos: sCAST at artifacts/scent-cast/src/lib/sourceCoverageContractFixtures.json (consumed by sourceCoverageContract.test.ts asserting isSourceCoverageComplete) and srt-scent-engine at contract/source_coverage_fixtures.json (consumed by test_source_coverage_contract.py asserting _source_coverage produces the engine_producible shapes). The two repos deploy independently; if either side changes the shape or the predicate, its own CI goes red before production drifts. When you intentionally change the contract, update BOTH copies in lockstep.",
+  "fixtures": [
+    {
+      "name": "dual_source_complete",
+      "description": "BN + FG both contributed and all 4 FG status-metric groups arrived — the fully-enriched steady state. The SPA self-heal loop must STOP here.",
+      "engine_producible": true,
+      "coverage": {
+        "basenotes": true,
+        "fragrantica": true,
+        "parfinity": false,
+        "fragrantica_cached": false,
+        "fragrantica_metrics_complete": true,
+        "fragrantica_cache_source": null,
+        "basenotes_linked": true,
+        "fragrantica_linked": true,
+        "parfinity_linked": false,
+        "derived_metrics": "full",
+        "complete": true
+      },
+      "spa_complete": true
+    },
+    {
+      "name": "bn_only_partial",
+      "description": "Basenotes contributed, Fragrantica did not (the routine Cloudflare-403 outcome). The SPA must keep the heal loop running.",
+      "engine_producible": true,
+      "coverage": {
+        "basenotes": true,
+        "fragrantica": false,
+        "parfinity": false,
+        "fragrantica_cached": false,
+        "fragrantica_metrics_complete": false,
+        "fragrantica_cache_source": null,
+        "basenotes_linked": true,
+        "fragrantica_linked": false,
+        "parfinity_linked": false,
+        "derived_metrics": "partial",
+        "complete": false
+      },
+      "spa_complete": false
+    },
+    {
+      "name": "fg_data_metrics_incomplete",
+      "description": "FG contributed cards but the 4 status-metric groups did NOT all arrive — engine considers this still-partial and the SPA must keep refreshing (the a781cf0 honesty fix).",
+      "engine_producible": true,
+      "coverage": {
+        "basenotes": true,
+        "fragrantica": true,
+        "parfinity": false,
+        "fragrantica_cached": false,
+        "fragrantica_metrics_complete": false,
+        "fragrantica_cache_source": null,
+        "basenotes_linked": true,
+        "fragrantica_linked": true,
+        "parfinity_linked": false,
+        "derived_metrics": "partial",
+        "complete": false
+      },
+      "spa_complete": false
+    },
+    {
+      "name": "legacy_metrics_flag_only",
+      "description": "SPA-robustness case (not engine-producible today): older payload without `complete`, carrying only fragrantica_metrics_complete.",
+      "engine_producible": false,
+      "coverage": {
+        "basenotes": true,
+        "fragrantica": true,
+        "fragrantica_metrics_complete": true
+      },
+      "spa_complete": true
+    },
+    {
+      "name": "legacy_derived_string_only",
+      "description": "SPA-robustness case (not engine-producible today): older payload where completeness is only expressed via derived_metrics string.",
+      "engine_producible": false,
+      "coverage": {
+        "basenotes": true,
+        "fragrantica": true,
+        "derived_metrics": "complete"
+      },
+      "spa_complete": true
+    },
+    {
+      "name": "empty_coverage",
+      "description": "Degenerate payload: an empty object must never read as complete.",
+      "engine_producible": false,
+      "coverage": {},
+      "spa_complete": false
+    }
+  ]
+}

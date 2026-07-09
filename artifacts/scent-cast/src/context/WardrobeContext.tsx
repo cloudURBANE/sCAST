@@ -1412,7 +1412,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const retryLoadWardrobe = useCallback(() => {
     if (authToken) {
       lastMutationRef.current = 0;
-      loadWardrobe(authToken);
+      void loadWardrobe(authToken);
     }
   }, [authToken, loadWardrobe]);
 

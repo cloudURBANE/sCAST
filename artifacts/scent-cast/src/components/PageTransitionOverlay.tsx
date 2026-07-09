@@ -143,11 +143,11 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
   const profile = lowRenderBudget ? compactMotionProfile : fullMotionProfile;
 
   useEffect(() => {
-    warmTransitionEmblem();
+    void warmTransitionEmblem();
   }, []);
 
   useEffect(() => {
-    if (visible) warmTransitionEmblem();
+    if (visible) void warmTransitionEmblem();
   }, [visible]);
 
   const reducedContent = (

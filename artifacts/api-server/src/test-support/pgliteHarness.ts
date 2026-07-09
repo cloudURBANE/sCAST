@@ -8,13 +8,16 @@
 // re-exports its modules extensionless (`export * from "./tenants"`), which the
 // esbuild bundle resolves but `node --test` (ESM, no bundler) does not. Raw SQL
 // against the REAL migrated schema is the honest integration surface anyway.
+import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 
 // Repo-root-relative: this file is artifacts/api-server/src/test-support/.
-const MIGRATIONS_FOLDER = new URL("../../../../lib/db/migrations", import.meta.url).pathname;
+// fileURLToPath (not URL.pathname, which yields the unusable `/C:/...` form on
+// Windows) so the harness runs on dev machines as well as CI.
+const MIGRATIONS_FOLDER = fileURLToPath(new URL("../../../../lib/db/migrations", import.meta.url));
 
 export type Harness = {
   client: PGlite;

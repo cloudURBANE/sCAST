@@ -384,7 +384,7 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
     const startWhenFontsSettle = () => scheduleDistanceUpdate(true);
 
     if (document.fonts?.ready) {
-      document.fonts.ready.then(startWhenFontsSettle);
+      void document.fonts.ready.then(startWhenFontsSettle);
     } else {
       startWhenFontsSettle();
     }
@@ -574,7 +574,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
     const startWhenFontsSettle = () => scheduleDistanceUpdate(true);
 
     if (document.fonts?.ready) {
-      document.fonts.ready.then(startWhenFontsSettle);
+      void document.fonts.ready.then(startWhenFontsSettle);
     } else {
       startWhenFontsSettle();
     }
@@ -1298,7 +1298,7 @@ function DashboardView() {
                 ref={signatureSectionRef}
                 layout={isMounted ? !calmLayout : false}
                 transition={vaultContentTransition}
-                className="scent-mission-action-slot mt-2 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[60px]"
+                className="scent-mission-action-slot mt-3 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[60px]"
               >
                 {/* Stable portal host for the Beam Agent cue / Confirm lane.
                     This element stays mounted for the whole time the action slot
@@ -1956,7 +1956,7 @@ export default function App() {
     activeRouteRef.current = nextRoute;
 
     clearTransitionWork();
-    warmTransitionEmblem();
+    void warmTransitionEmblem();
 
     transitionStartedAtRef.current = Date.now();
     setTransitionKey((key) => key + 1);
