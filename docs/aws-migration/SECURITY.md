@@ -71,6 +71,14 @@ frontend — it cannot pivot.
   with AWS Managed Rules (common rule set + known-bad-inputs) and rate-based
   rules. Left as a follow-up so the base cutover stays simple (see checklist).
 
+  > **Decision (2026-07-09, readiness gap S3): DEFERRED.** The app-level
+  > per-IP rate limits (OAuth/exchange, wardrobe/community writes) plus correct
+  > `TRUST_PROXY_HOPS` client-IP attribution make WAF marginal at current
+  > traffic, and a Web ACL adds fixed monthly cost. Revisit triggers: sustained
+  > bot/scrape traffic in CloudFront logs, a credential-stuffing incident, or
+  > the H1 multi-replica trigger firing (same "when data says so" review — see
+  > PRODUCTION_READINESS_PLAN_2026-07-07.md).
+
 ## 4. No secrets in the repo
 
 - Everything environment-specific is a **Terraform variable**, a **GitHub secret/
