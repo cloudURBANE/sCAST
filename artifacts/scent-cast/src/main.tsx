@@ -25,6 +25,25 @@ window.addEventListener("vite:preloadError", (event) => {
   }
 });
 
+// Apply the async-loaded Google Fonts stylesheet (index.html ships it with
+// media="print" so it never blocks first paint). This flip used to be an
+// inline `onload=` attribute, which the enforced CSP (`script-src 'self'`)
+// forbids — so it lives here instead. The sheet may already be loaded by the
+// time this module runs (module scripts are deferred), hence the sheet check.
+const googleFontsLink = document.getElementById(
+  "google-fonts-css",
+) as HTMLLinkElement | null;
+if (googleFontsLink && googleFontsLink.media !== "all") {
+  const applyFonts = () => {
+    googleFontsLink.media = "all";
+  };
+  if (googleFontsLink.sheet) {
+    applyFonts();
+  } else {
+    googleFontsLink.addEventListener("load", applyFonts, { once: true });
+  }
+}
+
 // Invisible iOS detail-modal crash tracer. Writes crash-surviving localStorage
 // breadcrumbs; surfaces nothing unless the URL carries `?__mcdiag`. Temporary.
 initCrashTrace();

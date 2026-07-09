@@ -1,10 +1,15 @@
 import { Router } from "express";
 import { randomUUID, randomBytes, createHash, timingSafeEqual } from "node:crypto";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db/schema";
+import { usersTable, userTokensTable } from "@workspace/db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { getTenantId } from "../middlewares/tenant";
-import { requireAuth, isUndefinedColumnError, type AuthRequest } from "../middlewares/auth";
+import {
+  requireAuth,
+  isUndefinedColumnError,
+  isUndefinedTableError,
+  type AuthRequest,
+} from "../middlewares/auth";
 import { hashToken } from "../lib/tokenAuth";
 import { mintHandoffCode, redeemHandoffCode } from "../lib/oauthCodeStore";
 import { rateLimitMiddleware } from "../lib/rateLimit";
@@ -197,59 +202,47 @@ async function createGoogleUserWithFallback(
   throw new Error("Failed to create user during Google OAuth callback");
 }
 
-async function ensureUserToken(
-  user: UserRow,
-  req: import("express").Request,
-): Promise<UserRow> {
-  if (user.token) {
-    return user;
-  }
-
-  const nextToken = randomUUID();
-  req.log.warn({ userId: user.id }, "User missing token after DB migration; repairing");
-  const [updated] = await db
-    .update(usersTable)
-    .set({ token: nextToken })
-    .where(eq(usersTable.id, user.id))
-    .returning();
-
-  if (!updated?.token) {
-    throw new Error("Failed to repair missing user token");
-  }
-
-  return updated;
-}
-
 /**
- * Backfill the token-hardening columns for the resolved user (production-
- * readiness C1/C2). Stamps token_hash = SHA-256(token) so auth can authenticate
- * by hash, sets token_issued_at on first stamp (coalesce keeps the original
- * issue time on later logins), and refreshes token_last_used_at. This is the
- * rolling backfill: every login stamps the row, so legacy plaintext-only rows
- * gain a hash without a bulk migration. Best-effort — if the columns aren't on
- * the live DB yet (42703) auth still works via the plaintext token fallback, so
- * a stamp failure must never block login.
+ * Mint a fresh bearer-token session for a login (production-readiness S2,
+ * finishing C1). The plaintext token exists only in this function's return value
+ * and the 60s handoff-code store — the DB keeps its SHA-256 hash in user_tokens,
+ * so no live credential is ever at rest. One row per login: each device gets its
+ * own session instead of sharing/rotating the legacy `users.token` column, and
+ * logout deletes all of the user's rows (sign-out everywhere, same as before).
+ *
+ * Fallback: a live DB that predates migration 0002 (RUN_MIGRATIONS_ON_BOOT
+ * disabled) has no user_tokens table — rotate the legacy users.token/token_hash
+ * columns exactly like the pre-0002 code so login still works there.
  */
-async function stampTokenSecurity(user: UserRow, req: import("express").Request): Promise<UserRow> {
-  if (!user.token) return user;
-  const desiredHash = hashToken(user.token);
-  if (user.tokenHash === desiredHash && user.tokenIssuedAt) return user;
+async function mintSessionToken(user: UserRow, req: import("express").Request): Promise<string> {
+  const nextToken = randomUUID();
   try {
-    const [updated] = await db
+    await db.insert(userTokensTable).values({
+      userId: user.id,
+      tokenHash: hashToken(nextToken),
+    });
+    return nextToken;
+  } catch (err) {
+    if (!isUndefinedTableError(err)) throw err;
+    req.log.warn({ userId: user.id }, "user_tokens not migrated yet — rotating legacy token column");
+  }
+
+  try {
+    await db
       .update(usersTable)
       .set({
-        tokenHash: desiredHash,
+        token: nextToken,
+        tokenHash: hashToken(nextToken),
         tokenIssuedAt: sql`coalesce(${usersTable.tokenIssuedAt}, now())`,
         tokenLastUsedAt: sql`now()`,
       })
-      .where(eq(usersTable.id, user.id))
-      .returning();
-    return updated ?? user;
+      .where(eq(usersTable.id, user.id));
   } catch (err) {
     if (!isUndefinedColumnError(err)) throw err;
-    req.log.warn({ userId: user.id }, "Skipping token_hash stamp — columns not migrated yet");
-    return user;
+    // Oldest possible DB: no hash columns either — rotate the plaintext column only.
+    await db.update(usersTable).set({ token: nextToken }).where(eq(usersTable.id, user.id));
   }
+  return nextToken;
 }
 
 async function updateUserPictureBestEffort(
@@ -481,19 +474,14 @@ router.get("/auth/google/callback", oauthRateLimit, async (req, res) => {
       throw new Error("OAuth callback resolved user without email");
     }
 
-    user = await ensureUserToken(user, req);
-    user = await stampTokenSecurity(user, req);
+    const sessionToken = await mintSessionToken(user, req);
     await updateUserPictureBestEffort(user.id, pictureUrl, req);
-
-    if (!user.token) {
-      throw new Error("OAuth callback resolved user without token/email");
-    }
 
     // C3: hand the SPA a single-use 60s code instead of the bearer token +
     // email in the redirect URL, so the live credential never lands in history,
     // Referer, or SPA-origin logs. The SPA POSTs it to /api/auth/exchange.
     const handoffCode = mintHandoffCode({
-      token: user.token,
+      token: sessionToken,
       email: user.email,
       ...(pictureUrl ? { pictureUrl } : {}),
     });
@@ -508,45 +496,51 @@ router.get("/auth/google/callback", oauthRateLimit, async (req, res) => {
 });
 
 /**
- * WS-18: server-side sign-out. The bearer token is the long-lived `users.token`
- * embedded in the OAuth redirect, so clearing it only client-side leaves a valid
- * credential live (e.g. if it leaked into history/logs). Rotating the column
- * invalidates the old token everywhere. Best-effort and idempotent — the client
- * clears local state regardless of the response.
+ * WS-18: server-side sign-out. Clearing the token only client-side leaves a
+ * valid credential live (e.g. if it leaked into history/logs), so delete ALL of
+ * the user's user_tokens sessions — sign-out everywhere, matching the legacy
+ * column-rotation semantics. Best-effort and idempotent — the client clears
+ * local state regardless of the response.
  */
 router.post("/auth/logout", oauthRateLimit, requireAuth, async (req: AuthRequest, res) => {
   const user = req.user!;
-  const nextToken = randomUUID();
   try {
-    // Rotate the hash alongside the plaintext token. Skipping token_hash would
-    // leave the OLD hash live — auth's hash-first lookup would keep accepting the
-    // logged-out credential, defeating server-side sign-out.
-    await db
-      .update(usersTable)
-      .set({
-        token: nextToken,
-        tokenHash: hashToken(nextToken),
-        tokenIssuedAt: sql`now()`,
-        tokenLastUsedAt: sql`now()`,
-      })
-      .where(eq(usersTable.id, user.id));
+    await db.delete(userTokensTable).where(eq(userTokensTable.userId, user.id));
   } catch (err) {
-    if (!isUndefinedColumnError(err)) {
-      req.log.error({ err, userId: user.id }, "Failed to rotate token on logout");
+    if (!isUndefinedTableError(err)) {
+      req.log.error({ err, userId: user.id }, "Failed to delete sessions on logout");
       res.status(500).json({ error: "Logout failed" });
       return;
     }
-    // Live DB without the token-hash columns yet: rotate the plaintext token
-    // only. The old token still dies (plaintext lookup no longer matches) and no
-    // stale hash exists to accept it.
+    // Live DB predating migration 0002: fall back to the legacy column rotation.
+    const nextToken = randomUUID();
     try {
-      await db.update(usersTable).set({ token: nextToken }).where(eq(usersTable.id, user.id));
+      await db
+        .update(usersTable)
+        .set({
+          token: nextToken,
+          tokenHash: hashToken(nextToken),
+          tokenIssuedAt: sql`now()`,
+          tokenLastUsedAt: sql`now()`,
+        })
+        .where(eq(usersTable.id, user.id));
     } catch (fallbackErr) {
       req.log.error({ err: fallbackErr, userId: user.id }, "Failed to rotate token on logout");
       res.status(500).json({ error: "Logout failed" });
       return;
     }
   }
+
+  // Transition hygiene: during a rolling deploy an old (pre-S2) instance still
+  // authenticates against users.token_hash — null it so the logged-out
+  // credential dies there too. Dead data after cutover; dropped with the legacy
+  // columns in the follow-up contraction migration.
+  try {
+    await db.update(usersTable).set({ tokenHash: null }).where(eq(usersTable.id, user.id));
+  } catch {
+    /* non-fatal — column may already be dropped */
+  }
+
   res.json({ ok: true });
 });
 

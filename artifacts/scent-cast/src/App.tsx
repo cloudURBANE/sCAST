@@ -384,7 +384,7 @@ const HeroMarquee: React.FC<HeroMarqueeProps> = React.memo(({ phrases }) => {
     const startWhenFontsSettle = () => scheduleDistanceUpdate(true);
 
     if (document.fonts?.ready) {
-      document.fonts.ready.then(startWhenFontsSettle);
+      void document.fonts.ready.then(startWhenFontsSettle);
     } else {
       startWhenFontsSettle();
     }
@@ -574,7 +574,7 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
     const startWhenFontsSettle = () => scheduleDistanceUpdate(true);
 
     if (document.fonts?.ready) {
-      document.fonts.ready.then(startWhenFontsSettle);
+      void document.fonts.ready.then(startWhenFontsSettle);
     } else {
       startWhenFontsSettle();
     }
@@ -1956,7 +1956,7 @@ export default function App() {
     activeRouteRef.current = nextRoute;
 
     clearTransitionWork();
-    warmTransitionEmblem();
+    void warmTransitionEmblem();
 
     transitionStartedAtRef.current = Date.now();
     setTransitionKey((key) => key + 1);

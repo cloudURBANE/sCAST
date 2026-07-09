@@ -1,13 +1,14 @@
-// Flat ESLint config (production-readiness F2). Intentionally NARROW: it starts
-// scoped to artifacts/api-server/src with a small set of high-value correctness
-// rules promoted to error, rather than turning on a recommended-type-checked
-// preset that would drown CI in thousands of pre-existing warnings. Expand
-// package-by-package (scent-cast next) as code is cleaned, not all at once.
+// Flat ESLint config (production-readiness F2). Intentionally NARROW: each
+// package gets a small set of high-value correctness rules promoted to error,
+// rather than a recommended-type-checked preset that would drown CI in
+// thousands of pre-existing warnings. Scope so far: api-server + scent-cast
+// (S6). Expand package-by-package as code is cleaned, not all at once.
 import tseslint from "typescript-eslint";
+import reactHooks from "eslint-plugin-react-hooks";
 
 export default tseslint.config(
   {
-    // Never lint build output, deps, generated code, or the SPA (not yet in scope).
+    // Never lint build output, deps, or generated code.
     ignores: [
       "**/dist/**",
       "**/dist-beam/**",
@@ -16,7 +17,6 @@ export default tseslint.config(
       "**/*.tsbuildinfo",
       "lib/api-client-react/src/generated/**",
       "lib/api-zod/src/generated/**",
-      "artifacts/scent-cast/**",
       "artifacts/mockup-sandbox/**",
       "**/.image-cache/**",
     ],
@@ -51,6 +51,41 @@ export default tseslint.config(
       // The console sweep (A6) is not fully complete in this package, so keep
       // this a WARNING for now (visible, non-blocking). Flip to "error" once the
       // remaining runtime console.* sites are moved to the pino logger.
+      "no-console": "warn",
+    },
+  },
+  {
+    // Scope: the SPA's runtime source (readiness gap S6) — where an un-awaited
+    // promise or stray console most often ships. Same narrow-rules approach as
+    // the api-server block above.
+    files: ["artifacts/scent-cast/src/**/*.ts", "artifacts/scent-cast/src/**/*.tsx"],
+    ignores: [
+      "artifacts/scent-cast/src/**/*.test.ts",
+      "artifacts/scent-cast/src/**/*.test.tsx",
+      // The service worker builds under its own tsconfig (WebWorker lib), so the
+      // project service can't type it here.
+      "artifacts/scent-cast/src/sw.ts",
+    ],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+    plugins: { "@typescript-eslint": tseslint.plugin, "react-hooks": reactHooks },
+    rules: {
+      "@typescript-eslint/no-floating-promises": "error",
+      // A hook called conditionally/in a loop is a guaranteed runtime bug class.
+      "react-hooks/rules-of-hooks": "error",
+      // Warn-only: several call sites carry deliberate, commented disable
+      // directives for this rule; enforcing it wholesale would churn working
+      // effect code. The plugin being registered also makes those existing
+      // `eslint-disable react-hooks/exhaustive-deps` comments resolvable.
+      "react-hooks/exhaustive-deps": "warn",
+      // Deliberate debug/diagnostic consoles exist in the SPA (crash tracing,
+      // PWA update logging); keep visibility without blocking while they're
+      // migrated to a leveled reporter.
       "no-console": "warn",
     },
   },
