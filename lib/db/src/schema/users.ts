@@ -14,17 +14,15 @@ export const usersTable = pgTable(
     // person may hold a separate account on each tenant.
     tenantId: uuid("tenant_id").references(() => tenantsTable.id),
     email: text("email").notNull(),
+    // LEGACY (S2): sessions moved to user_tokens (hash-only, one row per login —
+    // see userTokens.ts). Migration 0002 backfilled every row's session there and
+    // SCRUBBED this column with fresh random UUIDs, so the stored value no longer
+    // corresponds to any live credential. All four token columns below are dead
+    // data kept only so a pre-S2 instance survives the rolling deploy (its
+    // projections still select them); drop them in a follow-up contraction
+    // migration once no deployed code references them.
     token: uuid("token").notNull().defaultRandom(),
-    // SHA-256 hash of `token` (production-readiness C1). Auth looks the user up
-    // by this hash first so the live credential is never stored in plaintext;
-    // the plaintext `token` column stays for one release as a dual-read fallback
-    // and is backfilled + dropped by a later operator step. Nullable until the
-    // backfill lands: rows minted before this column (or via the DB `token`
-    // default) get their hash stamped on next login — see routes/oauth.ts
-    // stampTokenSecurity.
     tokenHash: text("token_hash"),
-    // Token lifetime tracking (production-readiness C2). NULL = unknown (legacy
-    // row) and never expires on that axis until stamped on next login.
     tokenIssuedAt: timestamp("token_issued_at"),
     tokenLastUsedAt: timestamp("token_last_used_at"),
     oauthProvider: text("oauth_provider"),

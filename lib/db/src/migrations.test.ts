@@ -9,12 +9,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 
-const migrationsFolder = new URL("../migrations", import.meta.url).pathname;
+// fileURLToPath (not URL.pathname, which yields the unusable `/C:/...` form on
+// Windows) so the suite runs on dev machines as well as CI.
+const migrationsFolder = fileURLToPath(new URL("../migrations", import.meta.url));
 
 async function tableColumns(client: PGlite, table: string): Promise<string[]> {
   const res = await client.query<{ column_name: string }>(

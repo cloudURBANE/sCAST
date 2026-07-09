@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { db } from "@workspace/db";
-import { usersTable } from "@workspace/db/schema";
+import { usersTable, userTokensTable } from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
 import { getTenantId } from "./tenant";
 import { isAdminUser } from "../lib/adminAccess";
@@ -46,12 +46,20 @@ const CORE_USER_COLUMNS = {
 // drizzle-orm (since 0.41) wraps driver errors in DrizzleQueryError, moving the
 // Postgres error (and its `code`) onto `cause` — so walk the cause chain instead
 // of reading `code` off the top-level error.
-export function isUndefinedColumnError(err: unknown): boolean {
+function hasPgErrorCode(err: unknown, code: string): boolean {
   for (let current = err, depth = 0; typeof current === "object" && current !== null && depth < 5; depth++) {
-    if ((current as { code?: string }).code === "42703") return true;
+    if ((current as { code?: string }).code === code) return true;
     current = (current as { cause?: unknown }).cause;
   }
   return false;
+}
+
+export function isUndefinedColumnError(err: unknown): boolean {
+  return hasPgErrorCode(err, "42703");
+}
+
+export function isUndefinedTableError(err: unknown): boolean {
+  return hasPgErrorCode(err, "42P01");
 }
 
 // Run a single-row user lookup with the migration-lag fail-safe: a bare
@@ -71,51 +79,47 @@ async function selectUserRow(
   }
 }
 
-// Best-effort refresh of token_last_used_at (production-readiness C2). Throttled
-// by shouldRefreshLastUsed to at most hourly. A failure — including the column
-// not being migrated yet — must never break authentication, so it's swallowed
-// and the idle window just doesn't advance this request.
-async function touchTokenLastUsed(userId: string, now: number): Promise<void> {
+// Best-effort refresh of the session's last_used_at (production-readiness C2).
+// Throttled by shouldRefreshLastUsed to at most hourly. A failure must never
+// break authentication, so it's swallowed and the idle window just doesn't
+// advance this request.
+async function touchSessionLastUsed(sessionId: string, now: number): Promise<void> {
   try {
     await db
-      .update(usersTable)
-      .set({ tokenLastUsedAt: new Date(now) })
-      .where(eq(usersTable.id, userId));
+      .update(userTokensTable)
+      .set({ lastUsedAt: new Date(now) })
+      .where(eq(userTokensTable.id, sessionId));
   } catch {
     /* non-fatal */
   }
 }
 
-export async function getUserByToken(token: string, tenantId?: string) {
-  if (!UUID_RE.test(token)) return null;
+// Best-effort cleanup of a session that failed the expiry check, so dead rows
+// don't accumulate and an expired hash can never be revived by a TTL env change.
+async function deleteExpiredSession(sessionId: string): Promise<void> {
+  try {
+    await db.delete(userTokensTable).where(eq(userTokensTable.id, sessionId));
+  } catch {
+    /* non-fatal */
+  }
+}
 
-  // C1: authenticate by SHA-256 hash first so a plaintext-token DB leak can't be
-  // replayed. token_hash is indexed. If the column isn't migrated onto the live
-  // DB yet (42703), fall through to the legacy plaintext lookup instead of 500ing.
-  let user: typeof usersTable.$inferSelect | null = null;
-  const tokenHash = hashToken(token);
+// Legacy lookup for a live DB that predates migration 0002 (user_tokens table
+// missing — only possible with RUN_MIGRATIONS_ON_BOOT disabled): authenticate
+// against users.token_hash exactly like the pre-0002 code. Deliberately NO
+// plaintext users.token fallback — that read path is what S2 removes.
+async function getUserByTokenLegacy(tokenHash: string, tenantId?: string) {
   const hashWhere = tenantId
     ? and(eq(usersTable.tokenHash, tokenHash), eq(usersTable.tenantId, tenantId))
     : eq(usersTable.tokenHash, tokenHash);
+  let user: typeof usersTable.$inferSelect | null = null;
   try {
     user = await selectUserRow(hashWhere);
   } catch (err) {
     if (!isUndefinedColumnError(err)) throw err;
   }
-
-  if (!user) {
-    // Fallback: a row whose token_hash hasn't been backfilled yet (stamped on
-    // next login), or a live DB still missing the hash column.
-    const tokenWhere = tenantId
-      ? and(eq(usersTable.token, token as any), eq(usersTable.tenantId, tenantId))
-      : eq(usersTable.token, token as any);
-    user = await selectUserRow(tokenWhere);
-  }
-
   if (!user) return null;
 
-  // C2: reject expired tokens. NULL issued/last-used timestamps (legacy or
-  // pre-migration rows) never expire until stamped on next login.
   const now = Date.now();
   const { expired } = evaluateTokenExpiry({
     issuedAt: user.tokenIssuedAt,
@@ -123,10 +127,56 @@ export async function getUserByToken(token: string, tenantId?: string) {
     now,
     ttl: resolveTokenTtl(process.env),
   });
-  if (expired) return null;
+  return expired ? null : user;
+}
 
-  if (shouldRefreshLastUsed(user.tokenLastUsedAt, now)) {
-    void touchTokenLastUsed(user.id, now);
+export async function getUserByToken(token: string, tenantId?: string) {
+  if (!UUID_RE.test(token)) return null;
+
+  // C1 (finished by S2): sessions live in user_tokens as SHA-256 hashes only —
+  // the plaintext credential is never at rest, so a DB dump can't be replayed.
+  // Look the session up by hash, then load the user row by id so the users-table
+  // 42703 migration-lag fail-safe still applies to that projection.
+  const tokenHash = hashToken(token);
+  let session: typeof userTokensTable.$inferSelect | null = null;
+  try {
+    const rows = await db
+      .select()
+      .from(userTokensTable)
+      .where(eq(userTokensTable.tokenHash, tokenHash))
+      .limit(1);
+    session = rows[0] ?? null;
+  } catch (err) {
+    if (!isUndefinedTableError(err)) throw err;
+    return getUserByTokenLegacy(tokenHash, tenantId);
+  }
+  if (!session) return null;
+
+  // C2: reject expired sessions. Every session row has issued_at (stamped at
+  // mint and backfilled by migration 0002), so the expiry policy covers the
+  // whole population — no never-expiring NULL rows (S9).
+  const now = Date.now();
+  const { expired } = evaluateTokenExpiry({
+    issuedAt: session.issuedAt,
+    lastUsedAt: session.lastUsedAt,
+    now,
+    ttl: resolveTokenTtl(process.env),
+  });
+  if (expired) {
+    void deleteExpiredSession(session.id);
+    return null;
+  }
+
+  // Tenant scoping: a token minted on Tenant A must not authenticate against
+  // Tenant B — enforced on the user-row load, same guarantee as before.
+  const userWhere = tenantId
+    ? and(eq(usersTable.id, session.userId), eq(usersTable.tenantId, tenantId))
+    : eq(usersTable.id, session.userId);
+  const user = await selectUserRow(userWhere);
+  if (!user) return null;
+
+  if (shouldRefreshLastUsed(session.lastUsedAt, now)) {
+    void touchSessionLastUsed(session.id, now);
   }
 
   return user;

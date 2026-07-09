@@ -15,6 +15,13 @@
       "when": 1783522566168,
       "tag": "0001_token_security",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783621541187,
+      "tag": "0002_user_token_sessions",
+      "breakpoints": true
     }
   ]
 }
