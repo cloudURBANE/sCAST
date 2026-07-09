@@ -35,8 +35,33 @@ import {
   resolvePublicBuyLinksForRows,
 } from "../services/buyLinks";
 import { resolveShareUser } from "../services/shareUsers";
+import { rateLimitMiddleware } from "../lib/rateLimit";
 
 const router = Router();
+
+function envRateLimit(envVar: string, fallback: number): number {
+  const raw = Number(process.env[envVar]);
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : fallback;
+}
+
+// GET /fragrances/search and POST /fragrances/details fan out to PAID external
+// APIs (Serper, Jina, Poof) on unauthenticated requests. Every peer cost-bearing
+// public route (oauth, scent, scent-facts, reviews, engine proxy) is rate
+// limited; these two were the outliers, leaving an anonymous client free to
+// script varying queries and drain the free-tier key pools — a financial DoS.
+// Guard them per-IP, matching the search-scent budget on the search route and a
+// tighter budget on the detail route (each detail hit can trigger a synchronous
+// source-backed lookup and a background Jina read).
+const fragranceSearchRateLimit = rateLimitMiddleware({
+  name: "fragrance-search",
+  limit: envRateLimit("FRAGRANCE_SEARCH_RATE_LIMIT", 60),
+  windowMs: 5 * 60_000,
+});
+const fragranceDetailsRateLimit = rateLimitMiddleware({
+  name: "fragrance-details",
+  limit: envRateLimit("FRAGRANCE_DETAILS_RATE_LIMIT", 40),
+  windowMs: 5 * 60_000,
+});
 
 const SOURCE_SEARCH_RESPONSE_BUDGET_MS = 1200;
 const SOURCE_DETAIL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
@@ -49,6 +74,25 @@ type SourceDetailCacheEntry = {
 };
 
 const sourceDetailCache = new Map<string, SourceDetailCacheEntry>();
+
+// Every distinct source_url ever posted to POST /api/fragrances/details would
+// otherwise accumulate for the process lifetime — eviction was lazy-on-read
+// only, so a URL fetched once and never re-requested was never removed. Bound
+// it with oldest-key eviction on insert of a NEW key, mirroring
+// writeWeatherCache/cityLabelCache. Re-setting an existing key (pending -> ready
+// /failed transition) keeps its slot and does not evict an unrelated entry.
+const SOURCE_DETAIL_CACHE_LIMIT = 500;
+
+function writeSourceDetailCache(cacheKey: string, entry: SourceDetailCacheEntry): void {
+  if (
+    !sourceDetailCache.has(cacheKey) &&
+    sourceDetailCache.size >= SOURCE_DETAIL_CACHE_LIMIT
+  ) {
+    const oldest = sourceDetailCache.keys().next().value;
+    if (oldest !== undefined) sourceDetailCache.delete(oldest);
+  }
+  sourceDetailCache.set(cacheKey, entry);
+}
 
 function canonicalSourceUrl(value: string): string {
   try {
@@ -187,8 +231,14 @@ function isDetailLocallyComplete(detail: Record<string, unknown>): boolean {
 
 /**
  * Producer hook for the enrichment queue. Fires a best-effort job for a detail
- * the backend's own source-coverage predicate (`isDetailLocallyComplete`, the
- * mirror of the SPA's `isSourceCoverageComplete`) judged INCOMPLETE. Idempotent
+ * the backend's own completeness predicate (`isDetailLocallyComplete`) judged
+ * INCOMPLETE. NOTE: this predicate is deliberately LOOSER than the SPA's
+ * `isSourceCoverageComplete` — for app-origin catalog/dataset details it treats
+ * a real `derived_metrics` payload as complete without requiring the
+ * `basenotes`/`fragrantica` source flags, which only exist on community-source
+ * (engine) details. Do not "align" it with the SPA predicate: that would mark
+ * metric-complete catalog items as incomplete and (once enrichment is enabled)
+ * attach a never-resolving "enrichment pending" marker to them. Idempotent
  * at the queue layer (upsert by canonical job key), terminal-status-skipping, and
  * strictly non-blocking — a queue failure can never affect the detail response.
  * Env-gated (off by default) so it adds no DB writes until enrichment is enabled.
@@ -466,7 +516,7 @@ function queueSourceDetailEnrichment(input: {
   const existing = getCachedSourceDetail(input.cacheKey);
   if (existing?.status === "pending") return;
 
-  sourceDetailCache.set(input.cacheKey, {
+  writeSourceDetailCache(input.cacheKey, {
     status: "pending",
     detail: input.provisional,
     expiresAt: Date.now() + SOURCE_DETAIL_CACHE_TTL_MS,
@@ -474,7 +524,7 @@ function queueSourceDetailEnrichment(input: {
 
   void buildEnrichedSourceDetail(input)
     .then((detail) => {
-      sourceDetailCache.set(input.cacheKey, {
+      writeSourceDetailCache(input.cacheKey, {
         status: "ready",
         detail,
         expiresAt: Date.now() + SOURCE_DETAIL_CACHE_TTL_MS,
@@ -482,7 +532,7 @@ function queueSourceDetailEnrichment(input: {
     })
     .catch((err) => {
       logger.warn({ err, sourceUrl: input.sourceUrl }, "fragrance source detail background enrichment failed");
-      sourceDetailCache.set(input.cacheKey, {
+      writeSourceDetailCache(input.cacheKey, {
         status: "failed",
         detail: {
           ...input.provisional,
@@ -517,7 +567,7 @@ async function searchScentSourcesWithResponseBudget(
   }
 }
 
-router.get("/fragrances/search", async (req, res) => {
+router.get("/fragrances/search", fragranceSearchRateLimit, async (req, res) => {
   const query = cleanQueryParam(req.query.q ?? req.query.query);
   if (!query) {
     res.status(400).json({ error: "Query is required" });
@@ -601,7 +651,7 @@ router.get("/fragrances/search", async (req, res) => {
   });
 });
 
-router.post("/fragrances/details", async (req, res) => {
+router.post("/fragrances/details", fragranceDetailsRateLimit, async (req, res) => {
   const sourceUrl = sourceUrlFromDetailBody(req.body);
   const identityFromId = identityIdFromDetailBody(req.body);
 

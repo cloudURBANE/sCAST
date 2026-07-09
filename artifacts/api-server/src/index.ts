@@ -73,17 +73,22 @@ async function start() {
     process.exit(1);
   }
 
-  const server = app.listen(port, "0.0.0.0", (err) => {
-    if (err) {
-      logger.error({ err }, "Error listening on port");
-      process.exit(1);
-    }
-
+  const server = app.listen(port, "0.0.0.0", () => {
     logger.info({ port }, "Server listening");
     startEnrichmentFailedJobRetrySweeper();
     // Consumer for the enrichment queue. No-op unless ENRICHMENT_WORKER_ENABLED
     // is set, so it stays dormant until enrichment is deliberately turned on.
     startEnrichmentWorker(enrichJobViaEngine);
+  });
+
+  // The listen callback is a one-shot 'listening' listener and never receives an
+  // error argument. A bind failure (EADDRINUSE, EACCES) is emitted as an 'error'
+  // event on the server — with no listener that rethrows and surfaces as a
+  // misleading "uncaughtException" fatal. Handle it explicitly so the failure
+  // mode is clear and the exit is intentional.
+  server.on("error", (err) => {
+    logger.error({ err }, "Error listening on port");
+    process.exit(1);
   });
 
   // Keep the server's keep-alive window wider than the upstream proxy idle

@@ -408,6 +408,10 @@ router.get("/auth/google/callback", oauthRateLimit, async (req, res) => {
         grant_type: "authorization_code",
         code_verifier: codeVerifier,
       }),
+      // undici's fetch has no default timeout; a hung/half-open socket to Google
+      // would otherwise leave this callback request pending indefinitely. Bound
+      // it — an abort throws and is caught below (server_error redirect).
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!tokenRes.ok) {
@@ -419,6 +423,7 @@ router.get("/auth/google/callback", oauthRateLimit, async (req, res) => {
 
     const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      signal: AbortSignal.timeout(10_000),
     });
 
     if (!userRes.ok) {

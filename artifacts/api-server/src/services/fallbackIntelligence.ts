@@ -122,7 +122,14 @@ function parseQuery(query: string): { brand: string; name: string } {
 export async function deepScrapeFragrance(query: string): Promise<ScrapedFragrance | null> {
   try {
     const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query + " perfume fragrance")}&utf8=&format=json`;
-    const res = await axios.get(searchUrl, { headers: { "User-Agent": "OlfactoryApp/1.0" } });
+    // Bound the request like every other outbound call in this service: undici/
+    // axios has no default timeout, so a hung Wikipedia socket on the guest
+    // POST /api/search-scent path would otherwise hold the request open with no
+    // deadline and tie up sockets under concurrent slow scrapes.
+    const res = await axios.get(searchUrl, {
+      headers: { "User-Agent": "OlfactoryApp/1.0" },
+      timeout: 8000,
+    });
 
     let snippet = "";
     if (res.data?.query?.search?.length > 0) {

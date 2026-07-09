@@ -55,6 +55,18 @@ export const pool = new Pool({
   connectionTimeoutMillis: parsePositiveInt(process.env.DATABASE_CONNECTION_TIMEOUT_MS, 10_000),
   idleTimeoutMillis: parsePositiveInt(process.env.DATABASE_IDLE_TIMEOUT_MS, 30_000),
 });
+
+// node-postgres emits 'error' on the Pool for IDLE clients when the backend
+// drops a connection (managed/shared Postgres like the Supabase pooler does
+// this routinely on idle timeout, failover, or a network blip). An EventEmitter
+// with no 'error' listener rethrows, which surfaces as an uncaughtException and
+// crashes the whole process — killing in-flight requests and bypassing graceful
+// shutdown. Log and swallow so the pool can self-heal (console, not pino: this
+// package loads before any app logger exists — matches the sslWarning above).
+pool.on("error", (err) => {
+  console.error("[db] idle client error (pool will recover)", err);
+});
+
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";

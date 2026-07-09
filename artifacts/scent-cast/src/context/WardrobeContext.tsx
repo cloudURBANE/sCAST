@@ -1361,8 +1361,6 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // Server confirmed our copy is current — leave items untouched.
         return;
       }
-      const etag = res.headers.get('ETag');
-      if (etag) wardrobeEtagRef.current = etag;
       if (res.status === 401) {
         // Token is missing/stale (e.g. left over from a DB reset). The backend
         // rejected it, so this is not a network problem; clear the dead token
@@ -1388,6 +1386,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // cooldown matches the entry guard above.
       if (isMutatingRef.current) return;
       if (Date.now() - lastMutationRef.current < 5000) return;
+      // Only advance the cached validator once we're actually applying this body.
+      // Advancing it on any non-304 response while the discard guards above throw
+      // the payload away would make every future conditional poll send the new
+      // tag, get a 304, and never observe the change we just discarded — until an
+      // unconditional focus/visibility poll happens to fire.
+      const etag = res.headers.get('ETag');
+      if (etag) wardrobeEtagRef.current = etag;
       setItems((prev) => reconcileWardrobeItems(prev, data));
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
