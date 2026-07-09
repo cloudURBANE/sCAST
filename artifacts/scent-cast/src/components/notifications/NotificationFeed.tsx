@@ -265,7 +265,7 @@ export function NotificationFeed() {
         // Client-side navigation — NEVER a full reload. A hard navigation here
         // tore down the whole SPA (and any in-progress Beam Agent conversation);
         // routing through React Router keeps that state intact.
-        navigate(item.url);
+        void navigate(item.url);
       } else {
         window.open(item.url, "_blank", "noopener,noreferrer");
       }

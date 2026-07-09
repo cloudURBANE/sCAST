@@ -113,7 +113,7 @@ export const BottleMarquee: React.FC<BottleMarqueeProps> = React.memo(({ items, 
     };
 
     if (document.fonts?.ready) {
-      document.fonts.ready.then(startWhenFontsSettle);
+      void document.fonts.ready.then(startWhenFontsSettle);
     } else {
       startWhenFontsSettle();
     }
