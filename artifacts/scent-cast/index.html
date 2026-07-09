@@ -160,13 +160,15 @@
       Load Google Fonts NON-BLOCKING. A plain `rel="stylesheet"` here is
       render-blocking: first paint waits on this cross-origin CSS. The
       `media="print"` trick lets the browser fetch the sheet at low priority
-      without blocking render, then `onload` swaps it to `media="all"` so the
+      without blocking render; main.tsx swaps it to `media="all"` so the
       fonts apply once available (`display=swap` already prevents invisible
-      text in the interim). The <noscript> fallback restores a normal blocking
-      stylesheet when JavaScript is unavailable. Same families/weights as
-      before — this is a load-strategy change only, not a font-stack change.
+      text in the interim). The swap lives in the bundle — NOT an inline
+      `onload=` handler — because inline handlers violate the enforced CSP's
+      `script-src 'self'` (readiness gap S1). The <noscript> fallback restores
+      a normal blocking stylesheet when JavaScript is unavailable. Same
+      families/weights as before — a load-strategy change only.
     -->
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Pinyon+Script&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <link id="google-fonts-css" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Pinyon+Script&display=swap" rel="stylesheet" media="print">
     <noscript>
       <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&family=Pinyon+Script&display=swap" rel="stylesheet">
     </noscript>
