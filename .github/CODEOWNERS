@@ -1,0 +1,14 @@
+# Default owner for anything not matched below.
+* @cloudURBANE
+
+# Schema changes and migrations — highest blast radius (shared Supabase
+# project also hosts another app's tables; see lib/db/drizzle.config.ts).
+/lib/db/ @cloudURBANE
+
+# Infra/deploy surface — Terraform, Dockerfile, CI, Railway/AWS config.
+/infra/ @cloudURBANE
+/Dockerfile @cloudURBANE
+/.github/workflows/ @cloudURBANE
+/railway.json @cloudURBANE
+/vercel.json @cloudURBANE
+/middleware.js @cloudURBANE
