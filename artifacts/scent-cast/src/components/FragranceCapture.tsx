@@ -449,6 +449,20 @@ export const FragranceCapture: React.FC<{
   const [hasSearched, setHasSearched] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
   const [loadingSurface, setLoadingSurface] = useState<LoadingSurface>(null);
+  // sm+ gate (Tailwind's 640px breakpoint) so phone widths can swap in a
+  // shorter placeholder that fits between the centered field's icon padding
+  // instead of clipping mid-word ("…fragra" against the search glyph).
+  const [isSmUp, setIsSmUp] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches,
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 640px)');
+    const sync = () => setIsSmUp(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
   const reduceMotion = useReducedMotion();
   // Canonical calm-motion gate (reduced-motion, phone-class touch, iPad Safari
   // performance mode) for the add-flow's height-collapse exits.
@@ -1283,8 +1297,10 @@ export const FragranceCapture: React.FC<{
           {/* Sized to read as an invitation, not a headline: the clamp was
               trimmed again (was 1.45–3.6rem) so this utility prompt no longer
               competes with the Scent Forecast hero below — the forecast
-              fragrance, not the search prompt, is the page star. */}
-          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(1.3rem,4vw,2.75rem)] leading-[1.05] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)] sm:leading-[1.03]">
+              fragrance, not the search prompt, is the page star. Floor lifted
+              1.3→1.5rem so it reads elegantly at 320–390px; the 2.75rem ceiling
+              (desktop) is unchanged. */}
+          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(1.5rem,4.4vw,2.75rem)] leading-[1.05] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)] sm:leading-[1.03]">
             Search any fragrance or brand.
           </h2>
         </header>
@@ -1341,7 +1357,7 @@ export const FragranceCapture: React.FC<{
                 setSearchFocused(false);
                 autoFocusPendingRef.current = false;
               }}
-              placeholder={searchFocused ? '' : 'Search by house or fragrance...'}
+              placeholder={searchFocused ? '' : isSmUp ? 'Search by house or fragrance...' : 'Search fragrances...'}
               aria-label="Look up a brand or fragrance"
               className="scent-lux-input scent-vault-search-input relative z-0 h-[56px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[64px] scroll-mt-28 px-16 sm:px-[4.35rem]"
             />

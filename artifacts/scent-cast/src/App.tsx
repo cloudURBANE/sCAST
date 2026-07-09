@@ -1298,7 +1298,7 @@ function DashboardView() {
                 ref={signatureSectionRef}
                 layout={isMounted ? !calmLayout : false}
                 transition={vaultContentTransition}
-                className="scent-mission-action-slot mt-2 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[60px]"
+                className="scent-mission-action-slot mt-3 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[60px]"
               >
                 {/* Stable portal host for the Beam Agent cue / Confirm lane.
                     This element stays mounted for the whole time the action slot
