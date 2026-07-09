@@ -41,6 +41,17 @@ storage trio as mandatory in production.
 
 Railway healthcheck path is already `/api/readyz` (`railway.json`).
 
+**If a separate "Beam MCP" Railway service runs from this same image**
+(overridden start command), its start command must change from
+`pnpm --filter @workspace/api-server run start:beam-mcp` to
+`pnpm run start:beam-mcp`. The Dockerfile's runtime stage (G1, multi-stage
+non-root rebuild) is now a pruned, standalone `@workspace/api-server`
+package with no `pnpm-workspace.yaml` alongside it, so a `--filter`
+invocation can no longer resolve — update that service's dashboard config
+in the same deploy that ships the new image. Also confirm
+`BEAM_AGENT_TOKEN_SECRET` is set on that service (it refuses to start
+without it).
+
 ---
 
 ## 2. Google Cloud Console
