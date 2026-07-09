@@ -192,6 +192,24 @@ body {
   overflow-x: hidden;
 }
 
+/* Installed-PWA zoom lock (class set by lib/pwaZoomLock.ts, standalone mode
+   only). `pan-x pan-y` keeps scrolling but drops pinch-zoom and double-tap
+   zoom, matching native-app viewport behavior. Browser tabs never get this
+   class, so accessibility zoom there is untouched. */
+html.pwa-standalone,
+html.pwa-standalone body {
+  touch-action: pan-x pan-y;
+}
+
+/* Same native-app rationale: inside the installed PWA, a long-press on artwork
+   (bottle packshots, icons) must not raise the iOS "Save/Copy image" browser
+   callout sheet. Browser tabs keep the default so users can still save images
+   from the website. */
+html.pwa-standalone img {
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+
 *,
 *::before,
 *::after {

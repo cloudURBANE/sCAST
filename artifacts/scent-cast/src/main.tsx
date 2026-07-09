@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { CrashDiag } from "./components/CrashDiag";
 import { PwaUpdater } from "./components/pwa/PwaUpdater";
 import { initCrashTrace } from "./lib/crashTrace";
+import { initPwaZoomLock } from "./lib/pwaZoomLock";
 import { reloadOnceForStaleChunk } from "./lib/routeChunkRecovery";
 import { I18nProvider } from "./i18n";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -43,6 +44,11 @@ if (googleFontsLink && googleFontsLink.media !== "all") {
     googleFontsLink.addEventListener("load", applyFonts, { once: true });
   }
 }
+
+// Native-app viewport behavior for the installed PWA: pinch/double-tap zoom
+// and the iOS input-focus auto-zoom are disabled in standalone mode only.
+// Browser tabs keep full accessibility zoom (see lib/pwaZoomLock.ts).
+initPwaZoomLock();
 
 // Invisible iOS detail-modal crash tracer. Writes crash-surviving localStorage
 // breadcrumbs; surfaces nothing unless the URL carries `?__mcdiag`. Temporary.

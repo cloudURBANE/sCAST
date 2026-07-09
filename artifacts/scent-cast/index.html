@@ -2,8 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- No `maximum-scale`/`user-scalable=no`: blocking pinch-zoom fails WCAG
-         1.4.4 (Resize Text) and iOS Safari ignores it anyway for accessibility.
+    <!-- No `maximum-scale`/`user-scalable=no` HERE: blocking pinch-zoom in a
+         browser tab fails WCAG 1.4.4 (Resize Text) and iOS Safari ignores it
+         anyway for accessibility. The INSTALLED PWA is different — native-app
+         viewport behavior is expected there, so src/lib/pwaZoomLock.ts
+         upgrades this meta (maximum-scale=1, user-scalable=no) at runtime
+         when running standalone. Keep the tab/browser meta zoomable.
          `viewport-fit=cover` is retained for the edge-to-edge safe-area layout. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!--
