@@ -9,7 +9,7 @@
     "./image": "./src/image/index.ts"
   },
   "dependencies": {
-    "@google/genai": "^1.44.0",
+    "@google/genai": "^2.10.0",
     "p-limit": "^7.3.0",
     "p-retry": "^7.1.1"
   }
