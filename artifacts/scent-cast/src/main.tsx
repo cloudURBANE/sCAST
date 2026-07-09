@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { CrashDiag } from "./components/CrashDiag";
 import { PwaUpdater } from "./components/pwa/PwaUpdater";
 import { initCrashTrace } from "./lib/crashTrace";
+import { initSentry } from "./lib/sentry";
 import { reloadOnceForStaleChunk } from "./lib/routeChunkRecovery";
 import { I18nProvider } from "./i18n";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -28,6 +29,10 @@ window.addEventListener("vite:preloadError", (event) => {
 // Invisible iOS detail-modal crash tracer. Writes crash-surviving localStorage
 // breadcrumbs; surfaces nothing unless the URL carries `?__mcdiag`. Temporary.
 initCrashTrace();
+
+// No-ops when VITE_SENTRY_DSN is unset (skips the dynamic import entirely, so
+// the SDK's bytes are never fetched). Wired to ErrorBoundary.componentDidCatch.
+void initSentry();
 
 // framer-motion runs in LazyMotion strict mode: components must render `m.*`
 // (never `motion.*` — strict mode throws on it), and the animation feature set

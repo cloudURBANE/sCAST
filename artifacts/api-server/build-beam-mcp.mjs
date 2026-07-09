@@ -96,7 +96,10 @@ async function buildBeamMcp() {
       "googleapis",
       "firebase-admin",
       "@parcel/watcher",
-      "@sentry/profiling-node",
+      // See build.mjs for why the whole @sentry/node dependency graph is
+      // external, not just @sentry/profiling-node (this build mirrors it).
+      "@sentry/*",
+      "import-in-the-middle",
       "@tree-sitter/*",
       "aws-sdk",
       "classic-level",

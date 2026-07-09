@@ -21,6 +21,7 @@ import reviewsRouter from "./reviews";
 import fragranceEngineProxyRouter from "./fragranceEngineProxy";
 import pushRouter from "./push";
 import notificationsRouter from "./notifications";
+import metricsRouter from "./metrics";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(reviewsRouter);
 router.use(fragranceEngineProxyRouter);
 router.use(pushRouter);
 router.use(notificationsRouter);
+router.use(metricsRouter);
 
 export default router;

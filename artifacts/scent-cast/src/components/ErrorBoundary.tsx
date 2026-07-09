@@ -6,6 +6,7 @@ import {
   reloadThroughFreshServiceWorker,
 } from '@/lib/routeChunkRecovery';
 import { crumb } from '@/lib/crashTrace';
+import { captureException } from '@/lib/sentry';
 
 interface Props {
   children: ReactNode;
@@ -62,6 +63,10 @@ export class ErrorBoundary extends Component<Props, State> {
     // case it already records, instead of only an ephemeral console line.
     crumb(`react-error${this.props.scope ? `:${this.props.scope}` : ''}: ${error.message}`);
     console.error('Uncaught error in boundary:', error, errorInfo);
+    captureException(error, {
+      componentStack: errorInfo.componentStack,
+      scope: this.props.scope,
+    });
   }
 
   private handleReset = () => {

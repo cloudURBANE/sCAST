@@ -12,6 +12,7 @@ import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { db, pool } from "@workspace/db";
 import app from "./app";
 import { logger } from "./lib/logger";
+import { initSentry, captureException, flushSentry } from "./lib/sentry";
 import {
   startEnrichmentFailedJobRetrySweeper,
   startEnrichmentWorker,
@@ -39,6 +40,12 @@ if (Number.isNaN(port) || port <= 0) {
 }
 
 async function start() {
+  // As early as possible: the uncaughtException/unhandledRejection handlers
+  // registered later in this function must be able to report to Sentry from
+  // the moment they exist. No-ops when SENTRY_DSN is unset (skips the dynamic
+  // import entirely, so an unconfigured deploy never touches the SDK).
+  await initSentry();
+
   // Cap libvips' worker-thread pool. sharp/libvips otherwise default `concurrency`
   // to the host core count and spins that many threads per in-flight image op; on a
   // small shared web dyno several concurrent fragrance-image builds oversubscribe the
@@ -137,6 +144,10 @@ async function start() {
 // exit on our own terms with the pool closed rather than being hard-killed.
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
+// Cap how long a fatal-error exit waits for Sentry's transport to flush the
+// just-captured event over the network before exiting anyway.
+const SENTRY_FLUSH_TIMEOUT_MS = 2_000;
+
 let shuttingDown = false;
 
 /**
@@ -194,12 +205,18 @@ function installGracefulShutdown(server: Server): void {
   // process exits. ON_FAILURE restart policy brings it back; this preserves the
   // evidence. Exit so we never keep serving from an unknown/corrupt state.
   process.on("uncaughtException", (err) => {
+    captureException(err);
     logger.fatal({ err }, "uncaughtException; exiting");
-    process.exit(1);
+    // Sentry's transport sends over the network; give it a short window to
+    // flush the just-captured event before the process exits out from under
+    // it (a bare process.exit() right after captureException would very
+    // likely drop it). No-ops immediately when Sentry isn't configured.
+    void flushSentry(SENTRY_FLUSH_TIMEOUT_MS).finally(() => process.exit(1));
   });
   process.on("unhandledRejection", (reason) => {
+    captureException(reason);
     logger.fatal({ err: reason }, "unhandledRejection; exiting");
-    process.exit(1);
+    void flushSentry(SENTRY_FLUSH_TIMEOUT_MS).finally(() => process.exit(1));
   });
 }
 

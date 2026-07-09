@@ -148,6 +148,31 @@ flip the HTML policy from report-only to enforcing. Out of scope for launch.
 
 ---
 
+## 8. Observability (Sentry + uptime)
+
+Both optional, both off by default — nothing below is required to launch, but
+they're what turns an incident into something you find out about immediately
+instead of from a user report.
+
+1. **Sentry** — create a project at sentry.io (or self-hosted), set:
+   - `SENTRY_DSN` on the Railway api-server service — captures unhandled 5xx
+     errors, `uncaughtException`, `unhandledRejection`. Bearer tokens/cookies
+     are redacted before sending.
+   - `VITE_SENTRY_DSN` at SPA build time (CloudFront/CI build env, not just
+     Railway) — captures errors the root `ErrorBoundary` catches. This is a
+     Vite build-time var: setting it later without rebuilding does nothing.
+   - Both are dynamically imported only when set, so leaving either unset
+     costs nothing (no network calls, and on the frontend, confirmed zero
+     added bundle bytes).
+2. **Uptime monitor** — point an external monitor (UptimeRobot, Better Stack,
+   etc. — not part of this repo) at `GET https://<public-host>/api/readyz`.
+   Expected: `200 {"status":"ready","checks":{"db":"ok","redis":"ok"|"not_configured"}}`
+   when healthy; `503` (`status:"not_ready"`, `checks.db:"error"`) when the
+   database is unreachable. Alert on non-200. Also monitor the CloudFront root
+   for a full frontend-down case.
+
+---
+
 ## Post-deploy smoke test
 
 A real OAuth round-trip needs production Google credentials, so it can't run

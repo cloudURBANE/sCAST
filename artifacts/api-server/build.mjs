@@ -68,7 +68,17 @@ async function buildAll() {
       "googleapis",
       "firebase-admin",
       "@parcel/watcher",
-      "@sentry/profiling-node",
+      // The whole @sentry/node dependency graph (D1): it's a dynamic `import()`
+      // in lib/sentry.ts, gated on SENTRY_DSN, specifically so an unconfigured
+      // deploy never loads it — but esbuild's default single-chunk bundling
+      // inlines a dynamic import of anything NOT external, which would hoist
+      // @sentry/node's own top-level imports of these OpenTelemetry packages
+      // into real top-level ESM imports in dist/index.mjs, defeating the
+      // whole point (Node would try to resolve them at module-load time,
+      // Sentry configured or not). External keeps the `import()` a genuine
+      // runtime-deferred Node module resolution.
+      "@sentry/*",
+      "import-in-the-middle",
       "@tree-sitter/*",
       "aws-sdk",
       "classic-level",

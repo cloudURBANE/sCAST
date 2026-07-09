@@ -9,6 +9,7 @@ import cjRedirectRouter from "./routes/cjRedirect";
 import { mountBeamAgent, isModelConfigured, resolveProvider } from "./beam-agent";
 import { resolveTenant } from "./middlewares/tenant";
 import { logger } from "./lib/logger";
+import { captureException } from "./lib/sentry.ts";
 import { parseAllowedOrigins } from "./lib/corsOrigins.ts";
 import { frontendStaticDir } from "./paths";
 
@@ -243,6 +244,13 @@ const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     },
     "Unhandled request error",
   );
+
+  // Only genuinely unexpected server-side failures — a 404 or a validated-away
+  // 4xx is expected traffic, not an incident, and would otherwise burn through
+  // the Sentry quota on noise.
+  if (statusCode >= 500) {
+    captureException(err);
+  }
 
   if (isApiRequest) {
     res.status(statusCode).json({ error: errorMessage });
