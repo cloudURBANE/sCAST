@@ -1,6 +1,10 @@
 // Must run before `./app` — ES modules evaluate imports before other statements,
 // so dotenv side effects live in this dependency-free module.
 import "./env-bootstrap";
+// Must run before `@workspace/db` (imported below): validates required vars
+// with a structured fatal message before that package's own bare `throw` on
+// a missing DATABASE_URL would otherwise fire first.
+import "./env-validate";
 import type { Server } from "node:http";
 import path from "node:path";
 import sharp from "sharp";
