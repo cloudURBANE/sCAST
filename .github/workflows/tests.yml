@@ -18,7 +18,7 @@ jobs:
         with:
           version: 9.15.9
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           # Match the Dockerfile (node:22-bookworm-slim) and engines (>=22.6).
           node-version: 22
