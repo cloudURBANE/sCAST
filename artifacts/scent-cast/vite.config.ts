@@ -122,7 +122,7 @@ export default defineConfig(async () => {
       // baseline (iOS 14+ Safari) while still allowing optional chaining, nullish
       // coalescing, and dynamic import to ship untransformed — smaller, faster
       // entry code.
-      target: ["es2020", "safari14"],
+      target: ["es2020", "safari14.1"],
       // Our vendor split intentionally produces a few chunks above the 500 KB
       // default; raise the advisory threshold so the build log isn't noisy with
       // warnings for chunks we've deliberately sized.
