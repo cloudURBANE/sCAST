@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so the migration guard can diff against the PR base.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
         with:
@@ -17,15 +20,29 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          # Match the Dockerfile (node:22-bookworm-slim) and engines (>=22.6).
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm run typecheck
 
+      - run: pnpm run lint
+
       - run: pnpm run test
 
       - run: pnpm --filter @workspace/scent-cast run build
 
       - run: pnpm --filter @workspace/scent-cast run perf:lhci
+
+      # A schema change must ship with a migration file (E1). Only meaningful on
+      # PRs, where a base ref exists to diff against.
+      - name: Require migration for schema changes
+        if: github.event_name == 'pull_request'
+        run: node scripts/check-migration-present.mjs "origin/${{ github.base_ref }}"
+
+      # Report-only for now: surfaces known-vulnerable prod deps without blocking
+      # merges. Flip to blocking (drop `|| true`) once findings are triaged.
+      - name: Dependency audit (non-blocking)
+        run: pnpm audit --prod --audit-level=high || true

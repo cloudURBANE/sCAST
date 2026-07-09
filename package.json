@@ -13,6 +13,7 @@
     "start": "corepack pnpm --filter @workspace/api-server run start",
     "typecheck:libs": "tsc --build",
     "typecheck": "corepack pnpm run typecheck:libs && corepack pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
+    "lint": "eslint .",
     "test": "corepack pnpm -r --if-present run test",
     "agent:run": "node scripts/agent-run.mjs",
     "agent:show": "node scripts/agent-show.mjs",
@@ -24,7 +25,10 @@
   },
   "private": true,
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.6.0",
+    "prettier": "^3.8.1",
     "typescript": "~5.9.2",
-    "prettier": "^3.8.1"
+    "typescript-eslint": "^8.63.0"
   }
 }

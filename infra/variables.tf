@@ -54,11 +54,10 @@ variable "github_repo" {
 }
 
 variable "github_deploy_refs" {
-  description = "Git refs (branches) allowed to assume the deploy role via OIDC. Defaults to main plus the pre-cutover migration branch."
+  description = "Git refs (branches) allowed to assume the deploy role via OIDC. Only main deploys; the pre-cutover migration branch (claude/vercel-aws-migration-mb8vae) was removed after PR #544 merged so a stale branch can no longer push to prod."
   type        = list(string)
   default = [
     "refs/heads/main",
-    "refs/heads/claude/vercel-aws-migration-mb8vae",
   ]
 }
 

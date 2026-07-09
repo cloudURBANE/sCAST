@@ -4,8 +4,11 @@ import "./env-bootstrap";
 import type { Server } from "node:http";
 import sharp from "sharp";
 import { pool } from "@workspace/db";
+import { runMigrations } from "@workspace/db/migrate";
 import app from "./app";
 import { logger } from "./lib/logger";
+import { captureException, flushSentry, initSentry } from "./lib/sentry";
+import { validateEnv } from "./lib/env";
 import {
   startEnrichmentFailedJobRetrySweeper,
   startEnrichmentWorker,
@@ -17,6 +20,26 @@ import { ensureTenantBaseline } from "./services/tenants";
 import { getSerperPool } from "./services/serperService";
 import { getRemoveBgPool } from "./services/bgService";
 import { announceRedisMode, getRedis, isRedisConfigured } from "./lib/redisClient";
+
+// Error tracking first: env-bootstrap has evaluated (module bodies run after
+// all imports), so SENTRY_DSN is loaded; everything after this is covered.
+initSentry();
+
+// Validate the whole env surface once at boot: fail loud on missing required
+// vars, warn on malformed values and probable typos, and log which optional
+// integrations are on/off so a misconfigured deploy is visible in one line.
+{
+  const envReport = validateEnv();
+  for (const warning of envReport.warnings) logger.warn({ env: warning }, "env: suspect configuration");
+  logger.info(
+    { on: envReport.integrationsOn, off: envReport.integrationsOff },
+    "env: optional integrations",
+  );
+  if (envReport.fatal.length > 0) {
+    for (const problem of envReport.fatal) logger.fatal({ env: problem }, "env: invalid required configuration");
+    process.exit(1);
+  }
+}
 
 const rawPort = process.env["PORT"];
 
@@ -63,9 +86,25 @@ async function start() {
   announceRedisMode();
   if (isRedisConfigured()) void getRedis();
 
+  // Versioned migrations at boot (E1). Opt-in: Railway's plan has no separate
+  // release phase, so the deploy step runs here, before the healthcheck-gated
+  // traffic cutover. Safe today because numReplicas is 1 (no concurrent
+  // migrators); drizzle's migrator also takes an advisory lock as a backstop.
+  // A failed migration refuses to serve — the readiness gate keeps the old
+  // instance live.
+  if (process.env["RUN_MIGRATIONS_ON_BOOT"] === "true") {
+    try {
+      await runMigrations();
+      logger.info("Database migrations applied");
+    } catch (err) {
+      logger.error({ err }, "Database migration failed; refusing to serve");
+      process.exit(1);
+    }
+  }
+
   // Self-heal the tenant baseline before serving: create the default tenant and
-  // backfill any pre-tenant rows. This removes the need to hand-run a migration
-  // in a precise order — the app converges every boot.
+  // backfill any pre-tenant rows. Kept as defense-in-depth alongside versioned
+  // migrations — it converges every boot regardless of migration state.
   try {
     await ensureTenantBaseline();
   } catch (err) {
@@ -162,13 +201,18 @@ function installGracefulShutdown(server: Server): void {
   // structured pino line (not just Node's default stderr trace) before the
   // process exits. ON_FAILURE restart policy brings it back; this preserves the
   // evidence. Exit so we never keep serving from an unknown/corrupt state.
+  // Report to Sentry (no-op when unconfigured) and give the event a bounded
+  // window to flush before exiting — pino already wrote the fatal line
+  // synchronously, so the evidence survives even if the flush doesn't.
   process.on("uncaughtException", (err) => {
     logger.fatal({ err }, "uncaughtException; exiting");
-    process.exit(1);
+    captureException(err);
+    void flushSentry().finally(() => process.exit(1));
   });
   process.on("unhandledRejection", (reason) => {
     logger.fatal({ err: reason }, "unhandledRejection; exiting");
-    process.exit(1);
+    captureException(reason);
+    void flushSentry().finally(() => process.exit(1));
   });
 }
 

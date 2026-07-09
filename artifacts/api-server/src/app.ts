@@ -10,6 +10,7 @@ import { mountBeamAgent, isModelConfigured, resolveProvider } from "./beam-agent
 import { resolveTenant } from "./middlewares/tenant";
 import { logger } from "./lib/logger";
 import { parseAllowedOrigins } from "./lib/corsOrigins.ts";
+import { captureException } from "./lib/sentry.ts";
 import { frontendStaticDir } from "./paths";
 
 const app: Express = express();
@@ -243,6 +244,12 @@ const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     },
     "Unhandled request error",
   );
+
+  // Server faults go to Sentry (no-op when unconfigured); 4xx are client
+  // behavior, not defects — keep them out of the error budget.
+  if (statusCode >= 500) {
+    captureException(err, { requestId: String(req.id ?? ""), path: req.path, method: req.method });
+  }
 
   if (isApiRequest) {
     res.status(statusCode).json({ error: errorMessage });

@@ -8,6 +8,13 @@
       "when": 1783467228983,
       "tag": "0000_baseline",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783522566168,
+      "tag": "0001_token_security",
+      "breakpoints": true
     }
   ]
 }
