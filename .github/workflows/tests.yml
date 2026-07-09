@@ -18,7 +18,11 @@ jobs:
         with:
           version: 9.15.9
 
-      - uses: actions/setup-node@v4
+      # v6: automatic package-manager detection was narrowed to npm, but an
+      # explicit `cache: pnpm` input is still honored (restoreCache is called
+      # with the input value directly). pnpm/action-setup above runs first so
+      # the pnpm store path resolves before this step.
+      - uses: actions/setup-node@v6
         with:
           # Match the Dockerfile (node:22-bookworm-slim) and engines (>=22.6).
           node-version: 22
