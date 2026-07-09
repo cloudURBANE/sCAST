@@ -20,6 +20,19 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
+    // Global ignores (no `files` key = applies repo-wide, per flat-config
+    // convention). Without this, a bare `eslint .` walks into esbuild's
+    // bundled output — which inlines vendor code verbatim, including
+    // `eslint-disable` comments referencing plugins we don't have installed
+    // — and fails on unresolvable rule names in files nothing here targets.
+    ignores: [
+      "**/dist/**",
+      "**/dist-beam/**",
+      "**/node_modules/**",
+      "**/.image-cache/**",
+    ],
+  },
+  {
     files: ["artifacts/api-server/src/**/*.ts"],
     ignores: [
       "artifacts/api-server/src/**/*.test.ts",
