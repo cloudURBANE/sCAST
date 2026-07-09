@@ -8,6 +8,7 @@ import { runMigrations } from "@workspace/db/migrate";
 import app from "./app";
 import { logger } from "./lib/logger";
 import { captureException, flushSentry, initSentry } from "./lib/sentry";
+import { validateEnv } from "./lib/env";
 import {
   startEnrichmentFailedJobRetrySweeper,
   startEnrichmentWorker,
@@ -23,6 +24,22 @@ import { announceRedisMode, getRedis, isRedisConfigured } from "./lib/redisClien
 // Error tracking first: env-bootstrap has evaluated (module bodies run after
 // all imports), so SENTRY_DSN is loaded; everything after this is covered.
 initSentry();
+
+// Validate the whole env surface once at boot: fail loud on missing required
+// vars, warn on malformed values and probable typos, and log which optional
+// integrations are on/off so a misconfigured deploy is visible in one line.
+{
+  const envReport = validateEnv();
+  for (const warning of envReport.warnings) logger.warn({ env: warning }, "env: suspect configuration");
+  logger.info(
+    { on: envReport.integrationsOn, off: envReport.integrationsOff },
+    "env: optional integrations",
+  );
+  if (envReport.fatal.length > 0) {
+    for (const problem of envReport.fatal) logger.fatal({ env: problem }, "env: invalid required configuration");
+    process.exit(1);
+  }
+}
 
 const rawPort = process.env["PORT"];
 
