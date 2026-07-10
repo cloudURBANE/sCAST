@@ -1,14 +1,20 @@
 import { writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
+const API_CONTRACT = {
+  description: '{"status":"ready","checks":{"db":"ok","redis":"ok"}}',
+  matches: (body) =>
+    body?.status === "ready" &&
+    body?.checks?.db === "ok" &&
+    body?.checks?.redis === "ok",
+};
+
 const CONTRACTS = {
-  api: {
-    description: '{"status":"ready","checks":{"db":"ok","redis":"ok"}}',
-    matches: (body) =>
-      body?.status === "ready" &&
-      body?.checks?.db === "ok" &&
-      body?.checks?.redis === "ok",
-  },
+  api: API_CONTRACT,
+  // Same Express /api/readyz contract, but reached through the canonical
+  // CloudFront /api/* proxy behavior — catches CDN/proxy misconfiguration
+  // that the direct Railway probe cannot see.
+  web: API_CONTRACT,
   engine: {
     description: '{"ok":true,"db":"ok"}',
     matches: (body) => body?.ok === true && body?.db === "ok",
