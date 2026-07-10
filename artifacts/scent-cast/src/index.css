@@ -322,174 +322,66 @@ a {
   z-index: 1;
 }
 
-/* Full-width "Discover Your Signature Scent" trigger. Shares the exact box of
-   the opened input that replaces it (same width, height, and radius). Built to
-   read as premium glass in the same language as the lower navigation pill
-   (translucent black base, blur, gold hairline, inset top highlight, deep drop
-   shadow) — then lifted for its primary-CTA role with a richer gold wash and a
-   one-shot light sheen on appear. All visuals live here (not inline) so
-   framer-motion can own transform/opacity for the enter/exit + morph-to-input
-   animation without fighting the cascade. */
-.scent-signature-cta {
-  position: relative;
-  overflow: hidden;
-  /* Deliberately one step QUIETER than the search input above it: search is
-     the primary top action, the agent is the premium secondary. Softer
-     border, thinner gold wash, calmer inset sheen. Rest border lifted
-     0.24→0.34 + a hairline gold ring (0 0 0 1px, no offset — a ring, not a
-     projected pool) so the pill has presence beside the gold-ringed search
-     input instead of reading flat. Depth stays neutral black. */
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.34);
-  background:
-    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.09), transparent 60%),
-    linear-gradient(180deg, rgba(255, 236, 183, 0.05), rgba(0, 0, 0, 0.64) 78%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 236, 183, 0.1),
-    inset 0 0 26px rgb(var(--scent-accent-rgb) / 0.028),
-    0 0 0 1px rgb(var(--scent-accent-rgb) / 0.12),
-    0 18px 48px rgba(0, 0, 0, 0.58);
-  -webkit-backdrop-filter: blur(14px) saturate(135%);
-  backdrop-filter: blur(14px) saturate(135%);
-  transition:
-    border-color var(--scent-transition-base) var(--scent-ease-out),
-    box-shadow var(--scent-transition-base) var(--scent-ease-out),
-    color var(--scent-transition-base) var(--scent-ease-out);
+/* Search mode: the hero sheds its card entirely. Even at whisper alphas the
+   outer frame kept the first screen reading as a stack of same-weight gold
+   capsules (card frame → input → CTA → atmosphere box), so the passive
+   container goes frameless — the headline and the gold input compose directly
+   on the page black, and the input is the ONLY strong capsule in the block.
+   Agent mode keeps the full card: there the panel is the conversation surface,
+   not passive chrome. (Attribute selector outranks the 640px media re-style
+   below, so this wins on every viewport.) */
+.scent-vault-panel[data-view-state="search"] {
+  border-color: transparent;
+  background: none;
+  box-shadow: none;
+  padding: 0;
 }
 
-/* Hover/press gold wash on its own layer. Gradient background-images are not
-   interpolable, so transitioning `background` on the button itself snapped
-   between states; fading this overlay's opacity gives the eased brightening
-   the transition always intended, and stays compositor-only. */
-.scent-signature-cta::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.09), transparent 62%),
-    linear-gradient(180deg, rgba(255, 236, 183, 0.05), transparent 78%);
-  opacity: 0;
-  transition: opacity var(--scent-transition-base) var(--scent-ease-out);
+.scent-vault-panel[data-view-state="search"]::before {
+  content: none;
+}
+
+/* "Discover With Beam Agent" trigger — a quiet, auto-width ghost pill. The old
+   treatment was a full-width glass slab (blur, gold washes, one-shot sheen)
+   that matched the search input's box and made the top half read as two
+   stacked primary capsules. The agent entry is the secondary action, so it now
+   reads as one: a hairline pill hugging its label, no fill, no filter, no
+   sheen — the search input keeps sole ownership of the strong gold up top.
+   Depth-free by design; hover/press feedback is border + text + a whisper of
+   accent fill only (never a projected gold pool — see $no-projected-gold-glow). */
+.scent-signature-cta {
+  position: relative;
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.3);
+  background: rgba(0, 0, 0, 0.35);
+  transition:
+    border-color var(--scent-transition-base) var(--scent-ease-out),
+    background-color var(--scent-transition-base) var(--scent-ease-out),
+    color var(--scent-transition-base) var(--scent-ease-out),
+    box-shadow var(--scent-transition-base) var(--scent-ease-out);
 }
 
 /* Hover effects are gated to hover-capable pointers: on touch, WebKit keeps
    :hover applied after a tap until the next tap elsewhere, so the hover state
    would visibly stick to the button. Keyboard focus stays unguarded. */
 @media (hover: hover) {
-  .scent-signature-cta:hover::before {
-    opacity: 1;
-  }
-}
-
-.scent-signature-cta:focus-visible::before {
-  opacity: 1;
-}
-
-/* One-shot gold light sweep that plays each time the CTA mounts (i.e. when the
-   discover state appears), echoing the brand/marquee gold-sheen. Animates the
-   pseudo-element's own transform only — never the button's — so it can't
-   collide with the framer-motion enter/exit. Clipped to the pill by
-   overflow:hidden above. */
-.scent-signature-cta::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    105deg,
-    transparent 32%,
-    rgba(255, 247, 201, 0.09) 46%,
-    rgba(255, 247, 201, 0.22) 50%,
-    rgba(255, 247, 201, 0.09) 54%,
-    transparent 68%
-  );
-  transform: translateX(-130%);
-  opacity: 0;
-}
-
-/* Keep the icon + label above the sheen layer. */
-.scent-signature-cta > * {
-  position: relative;
-  z-index: 1;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .scent-signature-cta::after {
-    animation: scent-cta-sheen 2.4s var(--scent-ease-out) 0.18s 1 both;
-  }
-}
-
-@media (hover: hover) {
   .scent-signature-cta:hover {
     border-color: rgb(var(--scent-accent-rgb) / 0.55);
+    background-color: rgb(var(--scent-accent-rgb) / 0.06);
     color: #fff7ec;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 236, 183, 0.16),
-      inset 0 0 30px rgb(var(--scent-accent-rgb) / 0.055),
-      0 0 0 1px rgb(var(--scent-accent-rgb) / 0.22),
-      0 22px 56px rgba(0, 0, 0, 0.6);
   }
 }
 
-/* Press: settle the glass a touch. Shadow-only so framer-motion keeps sole
-   ownership of transform during the press. */
 .scent-signature-cta:active {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 236, 183, 0.16),
-    inset 0 0 22px rgb(var(--scent-accent-rgb) / 0.05),
-    0 12px 30px rgba(0, 0, 0, 0.55);
+  background-color: rgb(var(--scent-accent-rgb) / 0.1);
 }
 
-/* The CTA carries its own (unlayered) box-shadow, which would otherwise swallow
-   Tailwind's ring utility — so compose the focus ring into the stack here to
-   keep it keyboard-accessible. */
 .scent-signature-cta:focus-visible {
   border-color: rgb(var(--scent-accent-rgb) / 0.6);
-  box-shadow:
-    0 0 0 2px rgba(255, 230, 163, 0.6),
-    inset 0 1px 0 rgba(255, 236, 183, 0.18),
-    inset 0 0 26px rgb(var(--scent-accent-rgb) / 0.05),
-    0 18px 48px rgba(0, 0, 0, 0.58);
-}
-
-@keyframes scent-cta-sheen {
-  0% {
-    transform: translateX(-130%);
-    opacity: 0;
-  }
-  16% {
-    opacity: 1;
-  }
-  84% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(130%);
-    opacity: 0;
-  }
+  box-shadow: 0 0 0 2px rgba(255, 230, 163, 0.6);
 }
 
 .scent-mission-action-slot {
   align-items: flex-start;
-}
-
-/* Touch performance mode drops the blur and sheen to avoid compositing jank,
-   the same trade-off the rest of the chrome makes. The premium gold-glass read
-   is preserved with an opaque gradient. */
-.scent-ipad-safari-perf .scent-signature-cta,
-.scent-touch-perf .scent-signature-cta {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  background:
-    radial-gradient(135% 165% at 50% -12%, rgb(var(--scent-accent-rgb) / 0.08), transparent 60%),
-    linear-gradient(180deg, rgba(26, 20, 10, 0.94), rgba(0, 0, 0, 0.94));
-}
-
-.scent-ipad-safari-perf .scent-signature-cta::after,
-.scent-touch-perf .scent-signature-cta::after {
-  display: none;
 }
 
 .scent-deferred-section {
@@ -2201,11 +2093,15 @@ a {
  * offscreen or the tab is hidden (see AtmosphereBar + useMarqueeSwipe).
  */
 .scent-weather-context {
+  /* Unboxed in the facelift pass: the bordered capsule made this the third
+     same-weight gold lozenge in the first viewport, and its hard rounded edge
+     cropped marquee cells mid-word ("…DITIONS"), which read as broken chrome.
+     Frameless, the strip is quiet ambient data — the row's edge-fade mask
+     (below) now provides the only, soft, boundary. */
   overflow: hidden;
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.18);
-  border-radius: var(--radius-scent);
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.96));
-  box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), 0 18px 44px -28px rgba(0, 0, 0, 0.95);
+  border: 0;
+  background: none;
+  box-shadow: none;
   contain: paint;
 }
 
