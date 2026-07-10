@@ -728,7 +728,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
     // floor (identical to the dark thread-field base) keeps dark theme
     // pixel-identical while giving light theme a legible dark base.
     <div className="min-h-[100svh] relative overflow-x-hidden bg-[#030201]">
-      <nav className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] sm:h-[calc(72px+env(safe-area-inset-top))] border-b border-white/5 bg-black/78 backdrop-blur-sm z-50 px-4 sm:px-8 pt-[env(safe-area-inset-top)]">
+      <nav aria-label="Primary" className="fixed top-0 left-0 right-0 h-[calc(4rem+env(safe-area-inset-top))] sm:h-[calc(72px+env(safe-area-inset-top))] border-b border-white/5 bg-black/78 backdrop-blur-sm z-50 px-4 sm:px-8 pt-[env(safe-area-inset-top)]">
         <div className="max-w-[1400px] mx-auto h-16 sm:h-[72px] flex items-center justify-center">
           <button
             type="button"

@@ -88,7 +88,7 @@ function VaultGridTileComponent({
       className="group cursor-pointer relative h-full min-w-0 rounded-scent outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
       role="button"
       tabIndex={0}
-      aria-label={`${name} by ${entryBrand(item)}`}
+      aria-label={entryBrand(item) ? `${name} by ${entryBrand(item)}` : name}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
       onMouseEnter={handleMouseEnter}
