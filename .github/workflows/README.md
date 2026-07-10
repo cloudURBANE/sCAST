@@ -4,6 +4,19 @@
 | --------------------- | -------------------------------- | ----------------------------------------------------------------------- |
 | `tests.yml`           | push to `main`, pull_request     | Typecheck + test + build + Lighthouse gate (unchanged).                 |
 | `deploy-frontend.yml` | push to `main`, workflow_dispatch| Test/build gate, then deploy the SPA to AWS S3 + CloudFront via OIDC.   |
+| `readiness-monitor.yml` | every five minutes, workflow_dispatch | Validate both production readiness JSON contracts and manage deduplicated GitHub incidents. |
+
+## `readiness-monitor.yml` — production outage detection
+
+The repository-owned monitor probes the canonical API and engine readiness
+endpoints every five minutes. It requires HTTP 200 plus each service's expected
+JSON contract. A failure opens (or reopens) one stable GitHub issue per service;
+a healthy result closes the open incident after recovery. The workflow itself
+fails whenever either service is unhealthy so normal Actions notifications fire.
+
+This monitor needs no secrets beyond the workflow-provided `GITHUB_TOKEN` with
+the declared `issues: write` permission. External SMS or phone escalation is a
+separate dashboard-owned alerting step.
 
 ## `deploy-frontend.yml` — auto-deploy the frontend to AWS
 
