@@ -13,7 +13,7 @@
 locals {
   use_custom_domain = trimspace(var.domain_name) != ""
   use_route53       = local.use_custom_domain && trimspace(var.route53_zone_id) != ""
-  aliases           = local.use_custom_domain ? [var.domain_name] : []
+  aliases           = local.use_custom_domain ? concat([var.domain_name], var.alternate_domain_names) : []
 
   # Prefer the validated ARN (route53 auto path); otherwise the raw cert ARN
   # (manual DNS path); null when no custom domain (use default CF cert).
@@ -25,8 +25,9 @@ locals {
 resource "aws_acm_certificate" "frontend" {
   count = local.use_custom_domain ? 1 : 0
 
-  domain_name       = var.domain_name
-  validation_method = "DNS"
+  domain_name               = var.domain_name
+  subject_alternative_names = var.alternate_domain_names
+  validation_method         = "DNS"
 
   lifecycle {
     create_before_destroy = true
