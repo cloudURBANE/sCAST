@@ -10,6 +10,7 @@ export function CommunityLoadingState({
   return (
     <div
       className={`mx-auto flex w-full max-w-[940px] items-center justify-center ${className}`}
+      role="status"
       aria-label={label}
     >
       <div className="h-8 w-8 rounded-full border border-white/15 border-t-scent-accent animate-spin" />

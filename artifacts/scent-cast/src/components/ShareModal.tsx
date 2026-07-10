@@ -340,6 +340,11 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                       type="button"
                       onClick={() => !isPending && handleToggle(item)}
                       disabled={isPending}
+                      aria-label={
+                        isHidden
+                          ? `${item.name} by ${item.brand} — hidden from your shared vault. Activate to show.`
+                          : `${item.name} by ${item.brand} — visible in your shared vault. Activate to hide.`
+                      }
                       className={`w-full flex items-center gap-3 px-4 py-3 border transition-colors duration-200 text-left group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white/40 ${
                         isHidden
                           ? 'bg-white/[0.01] border-white/5 opacity-50 hover:opacity-70'

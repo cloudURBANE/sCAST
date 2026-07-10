@@ -313,7 +313,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
   return (
     <>
-      <nav className="scent-topbar fixed left-0 right-0 top-0 z-50 pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] md:px-8">
+      <nav aria-label="Primary" className="scent-topbar fixed left-0 right-0 top-0 z-50 pl-[max(1rem,env(safe-area-inset-left,0px))] pr-[max(1rem,env(safe-area-inset-right,0px))] md:px-8">
         {/* Symmetric 1fr/auto/1fr on every breakpoint so the centre (logo)
             column is the true container centre: equal side tracks mean the
             wider desktop nav-link cluster on the left can't shove the logo

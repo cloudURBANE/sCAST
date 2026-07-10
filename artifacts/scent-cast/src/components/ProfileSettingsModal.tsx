@@ -564,12 +564,14 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         autoCapitalize="none"
                         autoCorrect="off"
                         spellCheck={false}
+                        aria-invalid={error ? true : undefined}
+                        aria-describedby="profile-username-help"
                         className="mt-2 w-full rounded-[10px] border border-white/10 bg-black/30 px-4 py-3 font-sans text-base text-white outline-none transition-[border-color,box-shadow] placeholder:text-white/35 focus:border-scent-accent/45 focus:ring-2 focus:ring-scent-accent/10"
                       />
                     </label>
 
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-[11px] leading-snug text-white/35" aria-live="polite">
+                      <p id="profile-username-help" className="text-[11px] leading-snug text-white/35" aria-live="polite">
                         {error ? (
                           <span className="text-red-300">{error}</span>
                         ) : (
