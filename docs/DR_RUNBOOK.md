@@ -3,10 +3,10 @@
 Backup, restore, and recovery procedure for ScentCast (production-readiness
 E2). This turns "backups exist somewhere" into a documented, testable story.
 
-> **Status of the restore drill:** ⛔ **not yet performed.** The procedure below
-> is written and ready; §4 must be executed once against a scratch project and
-> the actual timings recorded here. Until then, RTO/RPO are *targets*, not
-> verified facts.
+> **Status of the restore drill:** ✅ **functional restore verified 2026-05-06.**
+> The restored Supabase/Postgres data was queried and checked for row and
+> relationship integrity. The historical restore was not timed, so measured RTO
+> remains unknown and the targets below are not yet performance evidence.
 
 ---
 
@@ -72,12 +72,23 @@ Restore to a **scratch** project, never in-place, for the drill:
 5. **Stop the timer.** Record the actual elapsed time below.
 6. Tear down the scratch project.
 
-**Drill results (fill in on first run):**
+**Drill result — 2026-05-06:**
 
-- Date performed: _TBD_
-- Snapshot age used (→ effective RPO): _TBD_
-- Wall-clock restore + verify time (→ effective RTO): _TBD_
-- Issues found: _TBD_
+- Source artifact: `supabase-clean-backup-20260506-115506/full_database_clean.custom.dump`.
+- Restored target: the linked Supabase/Postgres project, validated before the
+  later runtime credential repair.
+- Verified rows: `users=4`, `user_fragrances=23`, `user_settings=4`,
+  `global_fragrances=36`, `conversations=0`, and `messages=0`.
+- Integrity: no missing tokens, duplicate email/OAuth groups, orphan wardrobe
+  or settings rows, missing fragrance identity fields, or duplicate lookup keys;
+  RLS was disabled on the six checked public application tables.
+- Effective RPO: bounded by the timestamp of the restored snapshot; the exact
+  incident-to-snapshot age was not retained.
+- Effective RTO: not measured during the historical restore. A future scheduled
+  re-drill should time restore plus API verification; do not rerun production or
+  perform an expensive restore merely to fill this documentation gap.
+- Evidence: `docs/OAUTH_DB_RECOVERY_STATUS_2026-05-06.md` and
+  `docs/SUPABASE_RECOVERY_PLAN.md`.
 
 Calendar a **re-drill every 6 months** and after any major schema or provider
 change.

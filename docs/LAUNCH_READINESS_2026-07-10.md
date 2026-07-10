@@ -7,6 +7,10 @@ sure are we" — for every agent and the owner. Supersedes the *status* portions
 of `MVP_READINESS_GAPS_2026-07-09.md` (which remains the reference for gap
 definitions; its IDs — S1…S9, E1…E9, X1…X4 — are reused here).
 
+**Last reconciled:** 2026-07-10 22:47 UTC. This revision incorporates merged
+monitoring/Sentry work, production deployment evidence, and the completed
+database restore validations. AWS/Terraform ownership remained out of scope.
+
 **Two different finish lines** (the owner asked for these to be separated):
 
 - **Ready to USE** — a real user can install the PWA / open the site, sign in,
@@ -27,11 +31,11 @@ definitions; its IDs — S1…S9, E1…E9, X1…X4 — are reused here).
 | --- | --- | --- | --- |
 | **Product functionality** (search, wardrobe, recommendations, images, Beam, community, arena) | **~95%** | High | Feature-complete for the intended MVP; both CI suites green on `main`; self-heal + contract fixtures on both sides |
 | **PWA / distribution surface** | **~95%** | High | Manifest, Workbox SW (precache, offline shell, push, update-prompt), icons, zoom-lock fix (#585) all verified in-repo |
-| **Security posture** | **~90%** | High | Token-hash cutover done, one-time OAuth handoff, rate limits everywhere, verified DB TLS both services, SSRF-hardened fetches; CSP still Report-Only (operator flip) |
-| **Deploy pipeline** | **~70%** | High | ⛔ `deploy-frontend` is **failing on `main` right now** — missing GitHub repo variables. Backend + engine deploys healthy |
-| **Operations** (monitoring, backups, runbooks) | **~65%** | High | Sentry live both services; runbooks written; but **zero uptime monitoring** and **no restore drill ever performed** on either DB |
-| **Ready to USE (10–20 user beta)** | **~85%** | High | Everything above combined; blockers are ~1–2 operator days, not engineering weeks |
-| **Ready to USE (open/public, hundreds of users)** | **~78%** | Medium-high | Adds: CSP enforce, E2E smoke, capacity ceilings, monitors under real load |
+| **Security posture** | **~90%** | High | Token-hash cutover done, one-time OAuth handoff, rate limits everywhere, verified DB TLS both services, SSRF-hardened fetches; CSP is Report-Only but lacks a collector |
+| **Deploy pipeline** | **~95%** | High | `deploy-frontend` main run `29128275763` succeeded for merge `c4ff605`; `scentbeam.com` now responds through CloudFront/AmazonS3; Railway deployments for API and engine are healthy |
+| **Operations** (monitoring, backups, runbooks) | **~90%** | High | Three Sentry projects are live; repository readiness monitoring runs every five minutes; both DB restore paths were validated. External phone/SMS escalation and CSP collection remain open |
+| **Ready to USE (10–20 user beta)** | **~95%** | High | Core launch engineering and repository operations are live; remaining blockers are dashboard confirmation and alert-channel work |
+| **Ready to USE (open/public, hundreds of users)** | **~85%** | Medium-high | CSP has no collection endpoint yet; external escalation, capacity evidence, and a focused browser smoke remain |
 | **Ready to SELL** | **~55%** | Medium | Affiliate rails are coded and legally disclosed, but no payment infra exists, affiliate program approvals are unverifiable from the repo, and revenue attribution is minimal |
 
 **How to read the confidence column:** "High" = every claim in that row was
@@ -61,19 +65,21 @@ cross-cutting gaps. The "readiness gap fixes" PRs (sCAST #581/#582, engine
 | S9 legacy token expiry | ✅ **Closed** | `0002` migration backfills via `COALESCE(token_issued_at, now())` |
 | S8 Redis optional at 1 replica | ✅ Accepted | unchanged, documented, trigger-based revisit |
 | Reimagine cost exposure (June image-cost audit) | ✅ **Closed** | `routes/scent.ts:684-701` — per-IP `reimagineRateLimit`, `ENABLE_REIMAGINE` kill-switch, busy-server 429, usage ledger |
+| sCAST Sentry | ✅ **Closed** | [sCAST PR #594](https://github.com/cloudURBANE/sCAST/pull/594) (`2967b62`), Railway deployment `a93b22b6-e8b3-4ddf-bb02-6e573b37644a`, API startup log, React project `4511713045381121`, API project `4511713056063488`, and both synthetic ingestion checks returned HTTP 200 |
+| S5 database restore | ✅ **Functional restore verified** | 2026-05-06 restored backup validation: `users=4`, `user_fragrances=23`, `user_settings=4`, `global_fragrances=36`, with clean orphan/duplicate checks. Historical RTO was not timed; see `docs/DR_RUNBOOK.md` |
 
 ### srt-scent-engine
 
 | Gap | Status | Evidence |
 | --- | --- | --- |
-| E1 error tracking | ✅ **Closed** | `sentry-sdk[fastapi]==2.20.0` in requirements; DSN-gated init in `api.py:364-371` |
+| E1 error tracking | ✅ **Closed and production-verified** | [engine PR #149](https://github.com/cloudURBANE/srt-scent-engine/pull/149) (`d3e6c96`) extracted/tested DSN-gated initialization, disabled request-body/default-PII capture, and covered daemon workers. Sentry project `scentbeam-engine`; Railway deployment `4b777e86-57df-4264-bb5c-b96836b12370`; synthetic store event `f56964a0da12413b917cfb44360eb9e3` accepted HTTP 200 |
 | E2 per-IP rate limits | ✅ **Closed** | `rate_limit.py` + middleware at `api.py:432-439`, env-tunable `RATE_LIMIT_*_PER_MIN`, covers search/details/requeue |
 | E3 verified DB TLS | ✅ **Closed** | `db.py:243-255` — `DATABASE_SSL_CA` → `sslmode=verify-full`, boot warning when unverified |
-| E4 readiness probe | ✅ **Closed** (code half) | `/readyz` at `api.py:2062`, `railway.toml` `healthcheckPath = "/readyz"`. Branch protection on `main` is a GitHub-settings step — **unverifiable from the repo, owner must confirm** |
-| E5 engine DR runbook | ✅ Written / ⛔ drill pending | `docs/DR_RUNBOOK.md` exists with loss-impact table; drill "not yet performed", RPO/RTO TBD |
+| E4 readiness + branch protection | ✅ **Closed** | `/readyz` is the Railway health gate. GitHub API verified strict `main` protection requiring the `test` check (app id `15368`) |
+| E5 engine DR | ✅ **Closed** | [engine PR #148](https://github.com/cloudURBANE/srt-scent-engine/pull/148) (`74b0aa4`): 6.3 MB dump, 9 tables and 5,061 public rows matched, 19.4s dump/restore, ~8 minutes end-to-end, restored `/readyz` HTTP 200 |
 | E6 dependency scanning | ✅ **Closed** | `.github/dependabot.yml` (pip + actions), pip-audit CI step |
 | E8 repo hygiene | ✅ **Closed** | diag scripts moved under `scripts/`, run outputs dropped |
-| CI health | ✅ Green | latest `ci` run on `main`: success (2026-07-09) |
+| CI health | ✅ Green | post-merge `ci` run `29128279083` on `main`: success (2026-07-10) |
 
 ### Cross-cutting
 
@@ -82,6 +88,7 @@ cross-cutting gaps. The "readiness gap fixes" PRs (sCAST #581/#582, engine
 | X2 cross-service contract | ✅ **Closed** | shared `source_coverage` fixtures asserted by both CI suites (engine commit 5a45759) |
 | X3 staging definition | ✅ **Closed** (decision doc) | `docs/STAGING.md` — per-layer staging (Railway PR envs + scratch Supabase + local Vite); activation is a ~15-min ops step |
 | X4 secrets rotation | ✅ **Closed** | `docs/SECRETS_ROTATION.md` — every credential family, both services, pairings noted |
+| X1 repository uptime monitoring | ✅ **Closed** | [sCAST PR #598](https://github.com/cloudURBANE/sCAST/pull/598) (`c4ff605`), five-minute workflow, exact JSON contracts, one deduplicated issue per service, auto-close on recovery, and failing workflow notifications. [Manual main run `29128285938`](https://github.com/cloudURBANE/sCAST/actions/runs/29128285938) passed |
 
 Also verified healthy and load-bearing (do not regress): PWA manifest +
 hand-authored Workbox SW with push and update-prompt; Google OAuth
@@ -91,52 +98,56 @@ Privacy Policy, Terms, and affiliate disclosure (`pages/legal.tsx`).
 
 ---
 
-## 3. What is LEFT — blocking a 10–20 user beta
+## 3. Current launch status and remaining beta blockers
 
-Ordered by severity. **Items 1–5 are operator/dashboard work, not engineering.**
-Total effort: roughly **1–2 focused days**, almost none of it code.
+The remaining items are now bounded dashboard/operations work. No AWS or
+Terraform files were changed during this reconciliation.
 
-### L1 (P0, live now) — the frontend deploy pipeline is broken on `main`
-`deploy-frontend` failed on both of today's `main` runs with
-`Input required and not supplied: aws-region` (run 29099446131). The workflow
-needs GitHub **repo variables** `AWS_REGION`, `FRONTEND_S3_BUCKET`,
-`CLOUDFRONT_DISTRIBUTION_ID` and **secret** `AWS_DEPLOY_ROLE_ARN`
-(`deploy-frontend.yml:108-161`) — none are set. Since Vercel was decommissioned
-(S3 ✅), **this failing workflow is the only way the SPA ships.** Until these
-four values are set (from the Terraform outputs in `infra/`), frontend changes
-do not reach users. Fix: GitHub → Settings → Secrets and variables → Actions;
-values come from `terraform output` per `docs/aws-migration/CUTOVER.md`.
+### L1 — deploy pipeline
+✅ **Resolved.** Main run `29128275763` completed successfully at merge
+`c4ff605`; the API and engine also completed their Railway health gates.
 
-### L2 (P0) — no uptime monitoring on either service (X1, unchanged)
-Still nothing watches `https://<web>/api/readyz` or `https://<engine>/readyz`.
-First outage detector is currently a user. 20 minutes on UptimeRobot/Better
-Stack (free tier) with email+phone alerts. Do this before inviting anyone.
+### L2 — uptime monitoring
+✅ **Repository monitor live.** `.github/workflows/readiness-monitor.yml` checks
+`https://api.scentbeam.com/api/readyz` and
+`https://srt-scent-engine-production.up.railway.app/readyz` every five minutes,
+including the distinct JSON contracts. It opens/reopens one stable incident per
+service, closes it after recovery, and fails the run for Actions notifications.
+Main dispatch run `29128285938` passed. **External SMS/phone escalation remains
+owner-blocked**: connect an external monitor or notification integration and
+test the escalation channel without deliberately taking production down.
 
-### L3 (P0) — restore drill never performed, on either database (S5 + E5)
-Both runbooks exist; both say "drill not yet performed; RPO/RTO TBD."
-Until one timed restore of the shared Supabase project **and** one of the
-engine's Railway PG has actually happened, backups are an assumption. A few
-hours total, following the written runbooks. The scratch Supabase project from
-`STAGING.md` doubles as the drill target.
+### L3 — database restore drills
+✅ **Complete for functional recovery.** The sCAST restored snapshot has exact
+row/integrity evidence in `docs/DR_RUNBOOK.md`; its historical wall-clock RTO
+was not recorded. The engine's 2026-07-10 scratch Railway drill has full row
+parity, 19.4s restore time, ~8 minute end-to-end time, and healthy `/readyz`.
+Do not rerun either expensive/destructive exercise merely for confirmation.
 
-### L4 (P1) — operator launch checklist (`docs/USER_LAUNCH_SETUP.md`)
-The non-code steps only the owner can do: Railway env for the API (storage
-trio is **mandatory** — missing storage creds break every fragrance image;
-`DATABASE_SSL_CA`; `TRUST_PROXY_HOPS=2`; enrichment flags), Google OAuth
-redirect URI for the canonical host, applying migrations to prod, engine
-`FRONTEND_ORIGINS`. Much may already be done in the dashboards — the repo
-can't see it. **Walk the checklist and initial each line.**
+### L4 — operator launch checklist (`docs/USER_LAUNCH_SETUP.md`)
+The remaining verified dashboard blocker is Google OAuth. The available browser
+session reached Google Cloud sign-in, so the authorized redirect URI could not
+be inspected. **Owner action:** sign in to Google Cloud Console → APIs & Services
+→ Credentials, open the production web client, and confirm
+`https://scentbeam.com/api/auth/google/callback` is an authorized redirect URI.
 
-### L5 (P1) — engine `main` branch protection (E4, op half)
-Railway deploys the engine on push independent of CI. Turn on branch
-protection requiring the `ci` check (GitHub settings — 2 minutes), or a red
-`main` can still ship.
+Affiliate program state is also owner-only: confirm Rakuten, CJ, and Amazon
+Associates application/approval status, then verify production `affiliate_links`
+rows use approved live program URLs. Do not invent credentials or program links.
 
-### L6 (P1) — CSP flip (S1, final step)
-Code blocker is gone. Confirm violation reports are actually being collected,
-bake ≥1 violation-free week of Report-Only under real beta traffic, then set
-`csp_enforce = true` in tfvars and apply. Target: during the beta, before
-public open-up.
+### L5 — engine `main` branch protection
+✅ **Complete.** The GitHub protection API reports strict required status checks
+and requires the Actions `test` check on `main`.
+
+### L6 — CSP collection before enforcement
+⛔ **Collection is not configured.** At 2026-07-10 22:35 UTC the production
+response carried `Content-Security-Policy-Report-Only`, but the policy had no
+`report-uri`/`report-to`, and the response had no `Reporting-Endpoints` or
+`Report-To` header. There is therefore no collection endpoint to test or recent
+violation stream to inspect. Keep enforcement off. The CSP owner is
+`infra/cloudfront.tf` (AWS/Terraform-owned and out of scope here); its owner must
+add and deploy a real collector, confirm accepted reports, then bake at least
+one violation-free week before considering enforcement.
 
 ### Explicitly NOT blocking the beta (do during/after)
 - **Playwright E2E smoke** (S4 remainder) — integration tests + green CI cover
@@ -235,15 +246,18 @@ decides which revenue path to build. Don't build Stripe before it.
 
 ## 5. Launch sequence (the plan)
 
-**Phase 0 — unblock (1–2 operator days):**
-L1 deploy variables → L2 uptime monitors → L4 launch checklist walk →
-L5 branch protection → L3 restore drills. Exit: green `deploy-frontend` on
-`main`, both monitors alerting, both drills logged with real RPO/RTO.
+**Phase 0 — repository and service operations:** ✅ deploy pipeline, repository
+monitor, three Sentry projects, engine branch protection, and both functional
+restore drills are complete. Remaining operator work: Google OAuth redirect
+confirmation, external phone/SMS escalation, affiliate-account verification,
+and a CSP collection endpoint owned by AWS/Terraform.
 
 **Phase 1 — closed beta (10–20 users, 2–4 weeks):**
-Invite from the fragrance communities. Watch: Sentry error rate, engine
+Invite from the fragrance communities only after the Google OAuth redirect is
+confirmed. Watch: Sentry error rate, engine
 completeness self-heal behavior under real cold searches, Beam usage ledger,
-uptime. During the window: CSP Report-Only bake (→ flip, L6), add the one
+uptime. During the window: configure CSP collection and begin the Report-Only
+bake (do not flip yet), add the one
 Playwright smoke, verify affiliate links click through with live SIDs. Exit
 metric: **week-2 return rate** — this is the number that picks the revenue
 model.
@@ -261,28 +275,28 @@ dashboards).
 
 ## 6. Owner confirmation checklist (state the repo cannot see)
 
-The percentage claims in §1 assume these are answered. Initial each:
+The percentage claims in §1 assume the remaining owner actions are completed:
 
-- [ ] GitHub repo vars/secrets for `deploy-frontend` set (L1) — **currently NOT set (CI proves it)**
-- [ ] Railway web-service env matches `USER_LAUNCH_SETUP.md` §1 (esp. image-storage trio, `DATABASE_SSL_CA`, `TRUST_PROXY_HOPS=2`)
-- [ ] Railway engine env: `FRONTEND_ORIGINS`, `DATABASE_SSL_CA`, `DECODO_DAILY_REQUEST_CAP`, `DISABLE_CHROMIUM_MINT=1`, Sentry DSN
-- [ ] Google OAuth redirect URI registered for the canonical prod host
-- [ ] Engine repo branch protection requires `ci` (L5)
-- [ ] Uptime monitors created and alerting (L2)
-- [ ] Restore drills performed, timings written into both DR runbooks (L3)
-- [ ] Affiliate accounts: Rakuten / CJ / Amazon Associates application status; `affiliate_links` rows populated with live program links
-- [ ] Sentry DSNs actually set in both prod services (code is DSN-gated)
-- [ ] CSP violation reports confirmed collecting (pre-flip requirement)
+- [x] `deploy-frontend` green on `main` — run `29128275763`
+- [x] Railway web/API Sentry configured and synthetic API/web events accepted
+- [x] Railway engine Sentry configured; deployment `4b777e86-57df-4264-bb5c-b96836b12370`; synthetic event accepted HTTP 200
+- [x] Engine repo `main` protection strictly requires the `test` check
+- [x] Repository five-minute uptime monitor active; main run `29128285938`
+- [x] Both database restore paths functionally verified; engine timing recorded, sCAST historical RTO unavailable
+- [ ] **Owner:** verify Google OAuth production redirect URI in Google Cloud Console
+- [ ] **Owner:** connect and test external SMS/phone escalation (repository monitoring is complete)
+- [ ] **AWS/Terraform owner:** configure CSP report collection, verify accepted reports, and inspect a real bake before enforcement
+- [ ] **Owner:** confirm Rakuten/CJ/Amazon Associates approvals and populate/verify approved live `affiliate_links`
 
 ---
 
 ## 7. Method + accuracy statement
 
-Every ✅ in §2 was verified today by reading the current code, migrations, CI
-workflow definitions, and live GitHub Actions run results — not by trusting
-prior audit docs. The one **live** P0 (L1) was found from today's failing
-`main` runs, not from any document. Percentages are judgment calls over that
-evidence: high-confidence rows are bounded by verified facts; the sell-side
-numbers are explicitly demand-dependent and marked accordingly. The biggest
-category of remaining uncertainty is dashboard state (Railway, GitHub
-settings, affiliate programs, Supabase backup tier) — §6 exists to close it.
+Every ✅ added by the reconciliation was checked against repository code,
+GitHub APIs/runs, Railway deployment state, production HTTP responses, Sentry
+ingestion HTTP responses, or the dated restore evidence. Secrets and DSNs were
+never printed. The unresolved items are deliberately not inferred from code:
+Google OAuth and affiliate state require owner dashboard access; external phone
+escalation requires a chosen provider/channel; CSP requires the AWS/Terraform
+owner to add a collector. Percentages remain judgment calls, while the evidence
+ledger above is the authoritative completion record.
