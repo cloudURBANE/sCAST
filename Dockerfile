@@ -34,6 +34,10 @@ RUN NODE_ENV=development CI=true pnpm install --frozen-lockfile
 ARG VITE_GIT_SHA=""
 ENV VITE_GIT_SHA=${VITE_GIT_SHA}
 
+# Vite replaces this public client key while building the SPA. Railway only
+# exposes service variables to Dockerfile builds when the argument is declared.
+ARG VITE_SENTRY_DSN=""
+
 # Typecheck + workspace builds (API bundle + SPA static output).
 RUN NODE_ENV=production pnpm run build
 
