@@ -35,6 +35,12 @@ variable "domain_name" {
   default     = ""
 }
 
+variable "alternate_domain_names" {
+  description = "Additional custom domains (e.g. [\"www.scentbeam.com\"]) added to the ACM certificate as SANs and to the CloudFront aliases. Only used when domain_name is set."
+  type        = list(string)
+  default     = []
+}
+
 variable "route53_zone_id" {
   description = "Optional Route53 hosted zone ID. When set together with domain_name, Terraform creates the ACM DNS-validation records, waits for validation, and creates an alias A/AAAA record pointing the domain at CloudFront. Leave empty if DNS is managed externally (then validate the cert manually — see README)."
   type        = string
