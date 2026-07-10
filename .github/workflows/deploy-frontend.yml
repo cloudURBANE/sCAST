@@ -96,9 +96,15 @@ jobs:
       # commit being deployed (jobs run on separate runners; no shared state).
       # Stamp the SPA build with the deployed commit: webVitalsTelemetry.ts
       # falls back to VITE_GIT_SHA now that Vercel's injected SHA is gone.
+      #
+      # VITE_SENTRY_DSN: repo variable (not a secret — the DSN ships in the
+      # public bundle by design). When unset, main.tsx skips the Sentry chunk
+      # entirely; #594 only wired this into the Dockerfile path, so without it
+      # here the canonical AWS deployment has no frontend error tracking.
       - run: pnpm run build:web
         env:
           VITE_GIT_SHA: ${{ github.sha }}
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
 
       # Assume the deploy role via OIDC. No access keys are stored anywhere;
       # the short-lived credentials come from the GitHub OIDC token.
