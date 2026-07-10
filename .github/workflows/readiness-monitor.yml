@@ -1,0 +1,91 @@
+name: Production readiness monitor
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: production-readiness-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Probe readiness contracts
+        id: probe
+        shell: bash
+        run: |
+          set +e
+          any_failed=0
+
+          node .github/scripts/check-readiness.mjs \
+            --service api \
+            --url https://api.scentbeam.com/api/readyz \
+            --output "$RUNNER_TEMP/readiness-api.json"
+          if [[ $? -ne 0 ]]; then any_failed=1; fi
+
+          node .github/scripts/check-readiness.mjs \
+            --service engine \
+            --url https://srt-scent-engine-production.up.railway.app/readyz \
+            --output "$RUNNER_TEMP/readiness-engine.json"
+          if [[ $? -ne 0 ]]; then any_failed=1; fi
+
+          echo "any_failed=$any_failed" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Open or close deduplicated incidents
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for service in api engine; do
+            result_file="$RUNNER_TEMP/readiness-${service}.json"
+            healthy=$(jq -r '.ok' "$result_file")
+            summary=$(jq -r '.summary' "$result_file")
+            checked_at=$(jq -r '.checkedAt' "$result_file")
+            url=$(jq -r '.url' "$result_file")
+            title="[uptime] ${service} readiness incident"
+            issue=$(gh issue list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state all \
+              --search "\"${title}\" in:title" \
+              --limit 100 \
+              --json number,state,title \
+              --jq ".[] | select(.title == \"${title}\") | [.number, .state] | @tsv" \
+              | head -n 1)
+            issue_number=$(cut -f1 <<< "$issue")
+            issue_state=$(cut -f2 <<< "$issue")
+
+            if [[ "$healthy" != "true" ]]; then
+              body=$(printf 'The five-minute production readiness monitor detected a failure.\n\n- Service: `%s`\n- Endpoint: %s\n- Checked: %s\n- Result: %s\n\nThis issue is managed automatically and will close after recovery.' "$service" "$url" "$checked_at" "$summary")
+              if [[ -z "$issue_number" ]]; then
+                gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+              elif [[ "$issue_state" == "CLOSED" ]]; then
+                gh issue reopen "$issue_number" --repo "$GITHUB_REPOSITORY"
+                gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body "$body"
+              fi
+            elif [[ -n "$issue_number" && "$issue_state" == "OPEN" ]]; then
+              gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" \
+                --body "Recovered at ${checked_at}. HTTP status and the expected JSON contract are healthy."
+              gh issue close "$issue_number" --repo "$GITHUB_REPOSITORY" \
+                --comment "Closing automatically after successful recovery."
+            fi
+          done
+
+      - name: Fail when a service is unhealthy
+        if: steps.probe.outputs.any_failed == '1'
+        run: exit 1
