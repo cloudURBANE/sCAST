@@ -87,7 +87,7 @@ locals {
   # data:/blob: images (canvas + PWA), the Python fragrance engine for direct
   # browser calls, and same-origin everything else. frame-ancestors mirrors
   # X-Frame-Options: DENY.
-  csp_value = join("; ", [
+  csp_value = join("; ", concat([
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
@@ -99,7 +99,12 @@ locals {
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-  ])
+    ],
+    # Violation reporting — the pre-flip requirement for csp_enforce. Without a
+    # report-uri, Report-Only violations are visible only in end users' consoles
+    # and the "violation-free week" bake can never be observed.
+    var.csp_report_uri == "" ? [] : ["report-uri ${var.csp_report_uri}"],
+  ))
 }
 
 # /assets/* : public, max-age=31536000, immutable
