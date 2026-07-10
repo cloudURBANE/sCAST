@@ -28,6 +28,12 @@ COPY scripts ./scripts
 # devDependencies (TypeScript, Vite, esbuild, ...) are needed for the build.
 RUN NODE_ENV=development CI=true pnpm install --frozen-lockfile
 
+# Build-time SPA version tag (a git SHA, not a secret): webVitalsTelemetry.ts
+# reads VITE_GIT_SHA when Vercel's injected VITE_VERCEL_GIT_COMMIT_SHA is
+# absent. Empty default keeps builds without the arg byte-identical to before.
+ARG VITE_GIT_SHA=""
+ENV VITE_GIT_SHA=${VITE_GIT_SHA}
+
 # Typecheck + workspace builds (API bundle + SPA static output).
 RUN NODE_ENV=production pnpm run build
 

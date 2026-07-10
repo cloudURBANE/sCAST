@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import sharp, { type Metadata } from "sharp";
 import { logger } from "../lib/logger";
 import { removeBgBuffer, type RemoveBgReason, type RemoveBgStatus } from "./bgService";
 import { getCatalogEntry, makeLookupKey, saveCatalogEntry } from "./catalogService";
@@ -82,7 +82,7 @@ export async function processAdminBottleImage(
 ): Promise<AdminBottleImageUploadResult> {
   // Reject anything sharp can't decode up front so a bad file fails fast with a
   // clear message rather than deep in the encode/upload stage.
-  let inputMeta: sharp.Metadata;
+  let inputMeta: Metadata;
   try {
     inputMeta = await sharp(input.buffer).metadata();
   } catch {

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { existsSync } from "node:fs";
-import express, { type ErrorRequestHandler, type Express, type RequestHandler, type Response } from "express";
+import express, { type ErrorRequestHandler, type Express, type Request, type RequestHandler, type Response } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import pinoHttp from "pino-http";
@@ -71,7 +71,11 @@ app.use(
 );
 
 app.use(
-  pinoHttp({
+  // pino-http v11 tightened its generics: without an explicit CustomLevels the
+  // call infers `string`, which rejects our default `pino.Logger<never>`. Pin
+  // the Request/Response generics (so the `req.id` serializer stays valid) and
+  // let CustomLevels fall back to its `never` default to match `logger`.
+  pinoHttp<Request, Response>({
     logger,
     serializers: {
       req(req) {

@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import sharp, { type Metadata } from "sharp";
 
 /** Bump when trim logic changes (e.g. for cache keys). */
 export const PACKSHOT_TRIM_VERSION = 4;
@@ -147,7 +147,7 @@ export async function trimPackshotBuffer(
     return { ok: false, reason: "oversized_input" };
   }
 
-  let meta0: sharp.Metadata;
+  let meta0: Metadata;
   try {
     meta0 = await sharp(input).metadata();
   } catch {
@@ -177,7 +177,7 @@ export async function trimPackshotBuffer(
     return { ok: false, reason: "resize_failed" };
   }
 
-  let before: sharp.Metadata;
+  let before: Metadata;
   try {
     before = await sharp(work).metadata();
   } catch {
@@ -229,7 +229,7 @@ export async function trimPackshotBuffer(
     return { ok: false, reason: "pipeline_failed" };
   }
 
-  let after: sharp.Metadata;
+  let after: Metadata;
   try {
     after = await sharp(outBuf).metadata();
   } catch {

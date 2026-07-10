@@ -47,13 +47,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 9.15.9
 
+      # v6: auto-detection limited to npm, but explicit `cache: pnpm` is still
+      # honored. pnpm/action-setup above runs first so the store path resolves.
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
@@ -62,7 +64,11 @@ jobs:
 
       - run: pnpm run test
 
+      # Stamp the SPA build with the deployed commit: webVitalsTelemetry.ts
+      # falls back to VITE_GIT_SHA now that Vercel's injected SHA is gone.
       - run: pnpm run build:web
+        env:
+          VITE_GIT_SHA: ${{ github.sha }}
 
   # ---------------------------------------------------------------------------
   # Deploy: only runs after `test` is green.
@@ -73,20 +79,26 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 9.15.9
 
+      # v6: auto-detection limited to npm, but explicit `cache: pnpm` is still
+      # honored. pnpm/action-setup above runs first so the store path resolves.
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
 
       # Rebuild in this job so the artifact we upload is produced from the exact
       # commit being deployed (jobs run on separate runners; no shared state).
+      # Stamp the SPA build with the deployed commit: webVitalsTelemetry.ts
+      # falls back to VITE_GIT_SHA now that Vercel's injected SHA is gone.
       - run: pnpm run build:web
+        env:
+          VITE_GIT_SHA: ${{ github.sha }}
 
       # Assume the deploy role via OIDC. No access keys are stored anywhere;
       # the short-lived credentials come from the GitHub OIDC token.
