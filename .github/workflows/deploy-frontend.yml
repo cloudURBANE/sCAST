@@ -64,7 +64,11 @@ jobs:
 
       - run: pnpm run test
 
+      # Stamp the SPA build with the deployed commit: webVitalsTelemetry.ts
+      # falls back to VITE_GIT_SHA now that Vercel's injected SHA is gone.
       - run: pnpm run build:web
+        env:
+          VITE_GIT_SHA: ${{ github.sha }}
 
   # ---------------------------------------------------------------------------
   # Deploy: only runs after `test` is green.
@@ -90,7 +94,11 @@ jobs:
 
       # Rebuild in this job so the artifact we upload is produced from the exact
       # commit being deployed (jobs run on separate runners; no shared state).
+      # Stamp the SPA build with the deployed commit: webVitalsTelemetry.ts
+      # falls back to VITE_GIT_SHA now that Vercel's injected SHA is gone.
       - run: pnpm run build:web
+        env:
+          VITE_GIT_SHA: ${{ github.sha }}
 
       # Assume the deploy role via OIDC. No access keys are stored anywhere;
       # the short-lived credentials come from the GitHub OIDC token.
