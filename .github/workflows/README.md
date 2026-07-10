@@ -3,16 +3,19 @@
 | Workflow              | Trigger                          | Purpose                                                                 |
 | --------------------- | -------------------------------- | ----------------------------------------------------------------------- |
 | `tests.yml`           | push to `main`, pull_request     | Typecheck + test + build + Lighthouse gate (unchanged).                 |
-| `deploy-frontend.yml` | push to `main`, workflow_dispatch| Test/build gate, then deploy the SPA to AWS S3 + CloudFront via OIDC.   |
-| `readiness-monitor.yml` | every five minutes, workflow_dispatch | Validate both production readiness JSON contracts and manage deduplicated GitHub incidents. |
+| `deploy-frontend.yml` | push to `main`, workflow_dispatch| Test/build gate, deploy the SPA to AWS S3 + CloudFront via OIDC, then a post-deploy Chromium smoke against the live host. |
+| `readiness-monitor.yml` | every five minutes, workflow_dispatch | Validate the production readiness JSON contracts (API direct, engine, and the canonical CloudFront path) and manage deduplicated GitHub incidents. |
 
 ## `readiness-monitor.yml` — production outage detection
 
-The repository-owned monitor probes the canonical API and engine readiness
-endpoints every five minutes. It requires HTTP 200 plus each service's expected
-JSON contract. A failure opens (or reopens) one stable GitHub issue per service;
-a healthy result closes the open incident after recovery. The workflow itself
-fails whenever either service is unhealthy so normal Actions notifications fire.
+The repository-owned monitor probes three readiness endpoints every five
+minutes: the Express API directly on Railway (`api`), the Python engine
+(`engine`), and the same Express readyz through the canonical CloudFront
+`/api/*` proxy (`web`) — the last one distinguishes "Railway down" from "CDN
+proxy broken". Each probe requires HTTP 200 plus the service's expected JSON
+contract. A failure opens (or reopens) one stable GitHub issue per service; a
+healthy result closes the open incident after recovery. The workflow itself
+fails whenever any probe is unhealthy so normal Actions notifications fire.
 
 This monitor needs no secrets beyond the workflow-provided `GITHUB_TOKEN` with
 the declared `issues: write` permission. External SMS or phone escalation is a
@@ -36,6 +39,7 @@ Terraform outputs in [`infra/`](../../infra):
 | Variable | `AWS_REGION`                 | (fixed)                       | `us-east-1`    |
 | Variable | `FRONTEND_S3_BUCKET`         | `frontend_bucket_name`        | `scentbeam-frontend-prod` |
 | Variable | `CLOUDFRONT_DISTRIBUTION_ID` | `cloudfront_distribution_id`  | `E123ABC456DEF` |
+| Variable | `VITE_SENTRY_DSN`            | (Sentry project → Client Keys; optional — SPA skips Sentry when unset) | `https://abc123@o123456.ingest.sentry.io/4500000000000000` |
 
 The IAM role's trust policy is scoped (in Terraform) to
 `repo:cloudURBANE/sCAST:ref:refs/heads/main` (plus the pre-cutover migration branch), and
