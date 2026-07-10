@@ -1298,7 +1298,7 @@ function DashboardView() {
                 ref={signatureSectionRef}
                 layout={isMounted ? !calmLayout : false}
                 transition={vaultContentTransition}
-                className="scent-mission-action-slot mt-3 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[60px]"
+                className="scent-mission-action-slot mt-3 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[52px]"
               >
                 {/* Stable portal host for the Beam Agent cue / Confirm lane.
                     This element stays mounted for the whole time the action slot
@@ -1340,7 +1340,11 @@ function DashboardView() {
                       // each other's transform.
                       whileTap={reduceMotion ? undefined : { scale: 0.98 }}
                       transition={vaultContentTransition}
-                      className="scent-signature-cta group flex h-[46px] w-full max-w-[52rem] items-center justify-center rounded-full px-6 text-[11.5px] font-bold uppercase tracking-[0.11em] text-scent-accent focus-visible:outline-none sm:h-[60px] sm:text-[13px] sm:tracking-[0.14em]"
+                      // Auto-width ghost pill (was a full-width glass slab that
+                      // duplicated the search input's box): the pill hugs its
+                      // label so the gold input above stays the block's only
+                      // full-width capsule. Height keeps the 44px+ tap target.
+                      className="scent-signature-cta group inline-flex h-[46px] items-center justify-center rounded-full px-7 text-[11.5px] font-bold uppercase tracking-[0.11em] text-scent-accent focus-visible:outline-none sm:h-[52px] sm:px-9 sm:text-[12.5px] sm:tracking-[0.14em]"
                       aria-label="Discover with Beam Agent"
                       title="Discover with Beam Agent"
                     >
