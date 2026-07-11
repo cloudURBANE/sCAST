@@ -77,6 +77,7 @@ import {
   collectMainAccordDisplayRows,
   extractDetailReviews,
   getWardrobeReviews,
+  isBackgroundEnrichmentQueued,
   normalizeSourceCoverage,
   getCachedReviewSummary,
   reviewSummaryCacheKey,
@@ -1888,6 +1889,9 @@ export const Wardrobe: React.FC<{
       selectedMetrics,
       selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? undefined,
     );
+  const selectedEnrichment =
+    selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? null;
+  const detailFactsResolving = isBackgroundEnrichmentQueued(selectedEnrichment);
   const detailShowDeferredContent = !constrainedDetailMode || detailDeferredContentReady;
   const detailPanelClassName = constrainedDetailMode
     // Constrained surfaces (iPhone/Android) render the panel full-screen and
@@ -2609,14 +2613,50 @@ export const Wardrobe: React.FC<{
 
                           {!bottleImageToolsOpen && detailMetaRows.length > 0 ? (
                             <div className="border-t border-white/[0.06] pt-3">
+                              <AnimatePresence initial={false} mode="wait">
+                                {detailFactsResolving ? (
+                                  <m.div
+                                    key="profile-resolving"
+                                    initial={{ opacity: 0, y: 4 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -4 }}
+                                    transition={{ duration: reducedDetailMotion ? 0.12 : 0.3, ease: SCENT_EASE_OUT }}
+                                    className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-scent-accent/15 bg-scent-accent/[0.035] px-3 py-2"
+                                    role="status"
+                                    aria-live="polite"
+                                  >
+                                    <span className="relative flex size-4 items-center justify-center" aria-hidden>
+                                      <span className={`absolute size-4 rounded-full border border-scent-accent/25 ${reducedDetailMotion ? '' : 'animate-ping'}`} />
+                                      <span className="size-1.5 rounded-full bg-scent-accent shadow-[0_0_8px_rgba(212,175,55,0.72)]" />
+                                    </span>
+                                    <span className="scent-type-chip text-scent-accent/75">Building scent profile</span>
+                                    <span className="text-[10px] text-scent-text-subtle">
+                                      {detailMetaRows.filter((row) => Boolean(row.value)).length}/4 facts resolved
+                                    </span>
+                                  </m.div>
+                                ) : (
+                                  <m.p
+                                    key="profile-ready"
+                                    initial={{ opacity: 0, y: 3 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0 }}
+                                    transition={{ duration: reducedDetailMotion ? 0.12 : 0.32 }}
+                                    className="mb-2 text-center text-[10px] uppercase tracking-[0.18em] text-scent-text-subtle"
+                                    role="status"
+                                  >
+                                    Profile scan complete · {detailMetaRows.filter((row) => Boolean(row.value)).length}/4 facts available
+                                  </m.p>
+                                )}
+                              </AnimatePresence>
                               <div className="grid grid-cols-2 gap-px">
                                 {detailMetaRows.map(({ field, label, value }) => {
                                   const isUnknown = !value;
-                                  const display = value ?? 'Unknown';
+                                  const isResolving = isUnknown && detailFactsResolving;
+                                  const display = value ?? (isResolving ? 'Resolving' : 'Unknown');
                                   const isEditing = editingFactField === field;
                                   // Only genuinely-missing metrics are editable. A
                                   // filled value renders as plain, non-interactive text.
-                                  const editable = canVerifyFacts && isUnknown;
+                                  const editable = canVerifyFacts && isUnknown && !isResolving;
                                   if (isEditing) {
                                     return (
                                       // The active editor spans the full width and
@@ -2673,7 +2713,13 @@ export const Wardrobe: React.FC<{
                                     );
                                   }
                                   return (
-                                    <div key={field} className="flex flex-col items-center gap-1 py-2 text-center">
+                                    <m.div
+                                      key={field}
+                                      layout
+                                      className="flex min-h-[3.75rem] flex-col items-center gap-1 py-2 text-center"
+                                      animate={{ opacity: isResolving ? 0.72 : 1 }}
+                                      transition={{ duration: reducedDetailMotion ? 0.1 : 0.28 }}
+                                    >
                                       <p className="scent-type-label">{label}</p>
                                       {editable ? (
                                         <button
@@ -2692,9 +2738,32 @@ export const Wardrobe: React.FC<{
                                           />
                                         </button>
                                       ) : (
-                                        <p className={`text-sm font-medium leading-snug ${isUnknown ? 'italic text-scent-text-subtle' : 'text-scent-text-muted'}`}>{display}</p>
+                                        <AnimatePresence mode="wait" initial={false}>
+                                          <m.p
+                                            key={display}
+                                            initial={{ opacity: 0, y: 3 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -3 }}
+                                            transition={{ duration: reducedDetailMotion ? 0.1 : 0.26 }}
+                                            className={`text-sm font-medium leading-snug ${isResolving ? 'italic text-scent-accent/60' : isUnknown ? 'italic text-scent-text-subtle' : 'text-scent-text-muted'}`}
+                                          >
+                                            {display}
+                                            {isResolving ? (
+                                              <span className="ml-1 inline-flex gap-0.5" aria-hidden>
+                                                {[0, 1, 2].map((dot) => (
+                                                  <m.span
+                                                    key={dot}
+                                                    className="inline-block size-0.5 rounded-full bg-scent-accent/70"
+                                                    animate={reducedDetailMotion ? undefined : { opacity: [0.25, 1, 0.25], y: [0, -1.5, 0] }}
+                                                    transition={{ duration: 1.1, repeat: Infinity, delay: dot * 0.14 }}
+                                                  />
+                                                ))}
+                                              </span>
+                                            ) : null}
+                                          </m.p>
+                                        </AnimatePresence>
                                       )}
-                                    </div>
+                                    </m.div>
                                   );
                                 })}
                               </div>
