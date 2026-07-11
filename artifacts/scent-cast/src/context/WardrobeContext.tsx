@@ -1250,6 +1250,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const wardrobeEtagRef = useRef<string | null>(null);
   const appStateRefreshInFlightRef = useRef(false);
   const imageBackfillTimersRef = useRef<number[]>([]);
+  const imageBackfillInFlightRef = useRef(false);
   // The single fragrance whose image is being actively backfilled (one burst runs
   // at a time — see `scheduleImageBackfillRehydrate`). Drives the honest "fetching
   // image…" affordance so a freshly-added imageless tile shows a spinner *while it
@@ -1467,6 +1468,43 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [clearImageBackfillTimers]);
 
+  // Resolve the shared catalog image and persist it into this user's row. A
+  // full wardrobe reload can keep returning an imageless row when the separate
+  // best-effort background write lags behind the catalog update.
+  const pollSignedInSharedImage = useCallback(async (target: Fragrance, token: string) => {
+    if (imageBackfillInFlightRef.current) return;
+    imageBackfillInFlightRef.current = true;
+    try {
+      const rowId = target._dbId ?? target.id;
+      const res = await fetch(`/api/wardrobe/${encodeURIComponent(rowId)}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ syncImageFromCatalog: true }),
+      });
+      // 409 means the deferred image pipeline is still working; the next
+      // scheduled probe will retry without surfacing an error to the user.
+      if (res.status === 409) return;
+      const data = (await res.json().catch(() => null)) as (Fragrance & { error?: string }) | null;
+      if (!res.ok || !data) return;
+
+      setItems((prev) =>
+        prev.map((item) =>
+          sameWardrobeEntry(item, target)
+            ? reconcileWardrobeItems([item], [{ ...data, id: item.id }])[0] ?? item
+            : item,
+        ),
+      );
+      clearImageBackfillTimers();
+    } catch {
+      /* non-fatal: the next scheduled probe (or give-up timer) handles it */
+    } finally {
+      imageBackfillInFlightRef.current = false;
+    }
+  }, [clearImageBackfillTimers]);
+
   // New fragrances save with no image: `POST /api/scent-profile` resolves images
   // deferred (returns empty now, backfills the shared catalog in the background),
   // so the tile only fills in when the shared catalog re-hydrates. Without help the
@@ -1500,7 +1538,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           return false;
         }
         if (token) {
-          void loadWardrobe(token);
+          void pollSignedInSharedImage(target, token);
         } else {
           void pollGuestSharedImage(target);
         }
@@ -1536,7 +1574,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         imageBackfillTimersRef.current.push(window.setTimeout(runProbe, delay));
       }
     },
-    [clearImageBackfillTimers, loadWardrobe, pollGuestSharedImage],
+    [clearImageBackfillTimers, pollGuestSharedImage, pollSignedInSharedImage],
   );
 
   useEffect(() => clearImageBackfillTimers, [clearImageBackfillTimers]);
