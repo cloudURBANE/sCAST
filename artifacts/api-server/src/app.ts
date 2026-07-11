@@ -8,6 +8,7 @@ import router from "./routes";
 import cjRedirectRouter from "./routes/cjRedirect";
 import { mountBeamAgent, isModelConfigured, resolveProvider } from "./beam-agent";
 import { resolveTenant } from "./middlewares/tenant";
+import { apiCacheSafety } from "./middlewares/apiCacheSafety";
 import { logger } from "./lib/logger";
 import { parseAllowedOrigins } from "./lib/corsOrigins.ts";
 import { captureException } from "./lib/sentry.ts";
@@ -129,6 +130,11 @@ app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 // Bind every request to a tenant (host-based, default-tenant fallback) before
 // any route runs, so authenticated and public endpoints alike are isolated.
 app.use(resolveTenant);
+
+// Cache-Control safety net for every /api response (including the Beam Agent
+// mount below). The Vercel edge middleware used to apply this; CloudFront
+// forwards origin headers untouched, so it must live here now.
+app.use("/api", apiCacheSafety);
 
 app.use("/api", router);
 app.use(cjRedirectRouter);
