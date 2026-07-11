@@ -511,8 +511,7 @@ test("saveCatalogEntry rejection is reported and remains non-fatal", async () =>
   });
 });
 
-test("image pipeline: the scored search-query (Serper) path is tried first; on an empty result the crawled sourceUrl is the fallback", async () => {
-  let callIdx = 0;
+test("image pipeline: only the scored search-query (Serper) path runs; an empty result stays imageless (the crawled url is never processed)", async () => {
   const { deps, calls } = makeDeps({
     findDatasetFragrance: () => ({
       name: "Sauvage",
@@ -521,14 +520,10 @@ test("image pipeline: the scored search-query (Serper) path is tried first; on a
       notes: ["bergamot"],
       description: "",
     }),
-    resolveProcessedFragranceImage: async (_opts) => {
-      callIdx++;
-      // First call (paid search-query / scored Serper winner) comes up empty;
-      // second (free crawled sourceUrl) succeeds. Recording is handled by
-      // makeDeps; the override only provides the return value.
-      if (callIdx === 1) return null;
-      return { imageUrl: "https://cdn.example.com/fallback.webp", storagePath: "images/processed/x.webp", imageHash: "abc", storageProvider: "supabase" };
-    },
+    // The scored Serper search comes up empty. The forwarded engine image
+    // (the crawled Fragrantica og:image) is owner-rejected for display and
+    // must not be processed as a fallback — the profile stays imageless.
+    resolveProcessedFragranceImage: async () => null,
   });
 
   const result = await buildProfileWithDeps(deps, "Sauvage", "Dior", {
@@ -536,16 +531,12 @@ test("image pipeline: the scored search-query (Serper) path is tried first; on a
   });
   ok(result);
 
-  assert.equal(calls.resolveProcessedFragranceImage.length, 2);
-  // First call: paid search-query (Serper) — the optimal, scored image.
+  assert.equal(calls.resolveProcessedFragranceImage.length, 1);
+  // Only call: paid search-query (Serper) — the optimal, scored image.
   assert.equal(calls.resolveProcessedFragranceImage[0].searchQuery, "Dior Sauvage");
   assert.equal(calls.resolveProcessedFragranceImage[0].sourceUrl, undefined);
-  // Second call: crawled sourceUrl fallback, stamped "crawled" (never "manual").
-  assert.equal(calls.resolveProcessedFragranceImage[1].sourceUrl, "https://upstream.example.com/raw.jpg");
-  assert.equal(calls.resolveProcessedFragranceImage[1].sourceProvider, "crawled");
-  assert.equal(calls.resolveProcessedFragranceImage[1].allowLookupCache, false);
 
-  assert.equal(result.imageUrl, "https://cdn.example.com/fallback.webp");
+  assert.equal(result.imageUrl, undefined);
 });
 
 test("image pipeline: search-query rejection is reported and does not abort buildProfile", async () => {
@@ -1016,15 +1007,14 @@ test("5A: the scored Serper winner is used even when a crawled image URL was for
   assert.equal(result.imageUrl, "https://cdn.example.com/from-serper.webp");
 });
 
-// --- new-add regression: forwarded engine image heals a deferred add --------
-// Reproduces the "no image on new fragrance adds" fix. The capture/add flow
-// runs buildProfile in `imageResolution: "deferred"` and forwards the engine's
-// already-resolved image as `fallback.imageUrl`. This proves the background
-// pass tries the scored Serper search FIRST, falls back to the crawled URL
-// when that search comes up empty, stamps the fallback "crawled", and pushes
-// it into the user's wardrobe rows via BE-2 — so a fresh add self-heals even
-// when a Serper image search finds nothing.
-test("deferred add with a forwarded engine image: background tries Serper first, lands the crawled fallback, and BE-2 backfills user rows", async () => {
+// --- deferred add with a forwarded engine image ------------------------------
+// The capture/add flow runs buildProfile in `imageResolution: "deferred"` and
+// forwards the engine's already-resolved image as `fallback.imageUrl`. That
+// crawled Fragrantica og:image is owner-rejected for display: the background
+// retry pass runs the scored Serper search ONLY, and when it stays empty the
+// add stays honestly imageless — nothing is saved or backfilled, and the
+// crawled url is never processed.
+test("deferred add with a forwarded engine image: background retries are Serper-only and the crawled url is never processed", async () => {
   const backfillCalls: Array<{ brand: string; name: string; image: { imageUrl?: string } }> = [];
   const { deps, calls } = makeDeps({
     findDatasetFragrance: () => ({
@@ -1038,17 +1028,10 @@ test("deferred add with a forwarded engine image: background tries Serper first,
     resolveCachedFragranceImage: async () => null,
     resolveProcessedFragranceImage: async (opts) => {
       const o = opts as { sourceUrl?: string; searchQuery?: string };
-      // The Serper (searchQuery) search finds nothing; the crawled (sourceUrl)
-      // fallback succeeds.
       if (o.sourceUrl) {
-        return {
-          imageUrl: "https://cdn.example.com/from-crawl.webp",
-          storagePath: "images/processed/crawled/from-crawl.webp",
-          imageHash: "crawl",
-          storageProvider: "supabase",
-          sourceProvider: "crawled",
-        };
+        throw new Error("the crawled url must never be processed");
       }
+      // The Serper (searchQuery) search finds nothing.
       return null;
     },
   });
@@ -1074,36 +1057,29 @@ test("deferred add with a forwarded engine image: background tries Serper first,
   // Let the fire-and-forget background pass settle.
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  // Background pass: Serper first (optimal), then the crawled URL as the
-  // documented fallback, stamped "crawled" so it can never masquerade as a
-  // human-curated image.
-  assert.equal(calls.resolveProcessedFragranceImage.length, 2);
+  // Background pass: the scored Serper search only — no crawled processing.
+  assert.equal(calls.resolveProcessedFragranceImage.length, 1);
   assert.equal(calls.resolveProcessedFragranceImage[0].searchQuery, "Dior Sauvage");
   assert.equal(
-    calls.resolveProcessedFragranceImage[1].sourceUrl,
-    "https://crawled.example/bottle.jpg",
+    calls.resolveProcessedFragranceImage.some((o) => typeof o.sourceUrl === "string"),
+    false,
+    "the crawled fallback must never be processed",
   );
-  assert.equal(calls.resolveProcessedFragranceImage[1].sourceProvider, "crawled");
 
-  // BE-2: the resolved image was pushed into the user's wardrobe rows so the
-  // tile self-heals, and the catalog was re-saved with the image.
-  assert.equal(backfillCalls.length, 1);
-  assert.equal(backfillCalls[0].brand, "Dior");
-  assert.equal(backfillCalls[0].name, "Sauvage");
-  assert.equal(backfillCalls[0].image.imageUrl, "https://cdn.example.com/from-crawl.webp");
-  assert.equal(calls.saveCatalogEntry.length, 2);
-  assert.equal(
-    calls.saveCatalogEntry[1].profile.imageUrl,
-    "https://cdn.example.com/from-crawl.webp",
-  );
+  // Nothing usable resolved, so nothing was pushed to rows or re-saved.
+  assert.equal(backfillCalls.length, 0);
+  assert.equal(calls.saveCatalogEntry.length, 1);
+  assert.equal(calls.saveCatalogEntry[0].profile.imageUrl, undefined);
 });
 
-// --- crawled upgrade: a cached crawled fallback triggers a Serper-only pass --
-// A deferred save that finds the crawled Fragrantica fallback in the cache
-// still displays it immediately, but the background pass must run Serper-only
-// attempts so the optimal image replaces the fallback in the catalog. Legacy
-// copies stamped "manual" with a Fragrantica source URL count as crawled too.
-test("deferred add with a cached crawled image: background upgrade runs Serper only and re-saves the catalog", async () => {
+// --- cached crawled fallback: never displayed, Serper upgrade still runs -----
+// A deferred save that finds the crawled Fragrantica fallback in the cache must
+// NOT display it (owner-rejected); the profile stays imageless and the
+// background pass runs the scored Serper search so the real image lands in the
+// catalog and (via BE-2) the user's rows. Legacy copies stamped "manual" with a
+// Fragrantica source URL count as crawled too.
+test("deferred add with a cached crawled image: profile stays imageless and the Serper pass re-saves the catalog", async () => {
+  const backfillCalls: Array<{ brand: string; name: string; image: { imageUrl?: string } }> = [];
   const { deps, calls } = makeDeps({
     findDatasetFragrance: () => ({
       name: "Sauvage",
@@ -1124,7 +1100,7 @@ test("deferred add with a cached crawled image: background upgrade runs Serper o
     }),
     resolveProcessedFragranceImage: async (opts) => {
       const o = opts as { sourceUrl?: string; searchQuery?: string };
-      if (o.sourceUrl) throw new Error("upgrade mode must never re-resolve the crawled URL");
+      if (o.sourceUrl) throw new Error("the crawled url must never be re-resolved");
       return {
         imageUrl: "https://cdn.example.com/from-serper.webp",
         storagePath: "images/processed/serper/dior-sauvage/def-v5.webp",
@@ -1134,6 +1110,9 @@ test("deferred add with a cached crawled image: background upgrade runs Serper o
       };
     },
   });
+  deps.backfillUserFragranceImages = async (brand, name, image) => {
+    backfillCalls.push({ brand, name, image });
+  };
 
   const result = await buildProfileWithDeps(
     deps,
@@ -1144,13 +1123,13 @@ test("deferred add with a cached crawled image: background upgrade runs Serper o
   );
   ok(result);
 
-  // The cached fallback is returned synchronously — displayable immediately.
-  assert.equal(result.imageUrl, "https://cdn.example.com/from-crawl.webp");
+  // The cached crawled fallback is NOT displayable — the add lands imageless.
+  assert.equal(result.imageUrl, undefined);
 
   // Let the fire-and-forget background upgrade settle.
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  // Serper-only upgrade ran and the catalog now carries the optimal image.
+  // Serper-only pass ran; the catalog and the user's rows got the optimal image.
   assert.equal(calls.resolveProcessedFragranceImage.length, 1);
   assert.equal(calls.resolveProcessedFragranceImage[0].searchQuery, "Dior Sauvage");
   assert.equal(calls.saveCatalogEntry.length, 2);
@@ -1159,9 +1138,11 @@ test("deferred add with a cached crawled image: background upgrade runs Serper o
     "https://cdn.example.com/from-serper.webp",
   );
   assert.equal(calls.saveCatalogEntry[1].profile.sourceProvider, "serper");
+  assert.equal(backfillCalls.length, 1);
+  assert.equal(backfillCalls[0].image.imageUrl, "https://cdn.example.com/from-serper.webp");
 });
 
-test("5A: falls back to the crawled URL when the Serper search throws (not just when it is empty)", async () => {
+test("5A: a Serper failure never falls back to the crawled URL — the profile stays imageless and the error is reported", async () => {
   const { deps, calls } = makeDeps({
     resolveCachedFragranceImage: async () => null,
     resolveProcessedFragranceImage: async (opts) => {
@@ -1179,11 +1160,10 @@ test("5A: falls back to the crawled URL when the Serper search throws (not just 
   });
   ok(result);
 
-  // Serper tried first, then the crawled URL as the documented fallback.
-  assert.equal(calls.resolveProcessedFragranceImage.length, 2);
+  // Serper tried; the crawled URL was NOT processed as a fallback.
+  assert.equal(calls.resolveProcessedFragranceImage.length, 1);
   assert.equal(calls.resolveProcessedFragranceImage[0].searchQuery, "Dior Sauvage");
-  assert.equal(calls.resolveProcessedFragranceImage[1].sourceUrl, "https://crawled.example/bottle.jpg");
-  assert.equal(result.imageUrl, "https://cdn.example.com/from-crawl.webp");
+  assert.equal(result.imageUrl, undefined);
   // The Serper failure was reported, not swallowed silently.
   assert.equal(calls.reportNonFatalError.length, 1);
   assert.equal(calls.reportNonFatalError[0].area, "scentEngine.imageResolution");
