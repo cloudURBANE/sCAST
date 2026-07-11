@@ -8,6 +8,7 @@ import router from "./routes";
 import cjRedirectRouter from "./routes/cjRedirect";
 import { mountBeamAgent, isModelConfigured, resolveProvider } from "./beam-agent";
 import { resolveTenant } from "./middlewares/tenant";
+import { apiCacheSafety } from "./middlewares/apiCacheSafety";
 import { logger } from "./lib/logger";
 import { parseAllowedOrigins } from "./lib/corsOrigins.ts";
 import { captureException } from "./lib/sentry.ts";
@@ -130,6 +131,11 @@ app.use(express.urlencoded({ extended: true, limit: DEFAULT_BODY_LIMIT }));
 // any route runs, so authenticated and public endpoints alike are isolated.
 app.use(resolveTenant);
 
+// Cache-Control safety net for every /api response (including the Beam Agent
+// mount below). The Vercel edge middleware used to apply this; CloudFront
+// forwards origin headers untouched, so it must live here now.
+app.use("/api", apiCacheSafety);
+
 app.use("/api", router);
 app.use(cjRedirectRouter);
 
@@ -151,6 +157,15 @@ if (isModelConfigured()) {
       "Until then every concierge turn falls back to the scripted /api/scent-mission path.",
   );
 }
+
+// Unknown /api paths must return a JSON 404 — registered after every /api
+// mount so it only catches misses. Without it, a GET to a nonexistent /api
+// route falls through to the SPA static fallback below and returns the HTML
+// shell with HTTP 200 (observed live on scentbeam.com), which breaks JSON
+// error handling in API clients.
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "Not Found" });
+});
 
 const serveFrontendUnavailable: RequestHandler = (req, res, next) => {
   if ((req.method !== "GET" && req.method !== "HEAD") || req.path.startsWith("/api")) {

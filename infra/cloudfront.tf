@@ -225,6 +225,40 @@ resource "aws_cloudfront_response_headers_policy" "no_cache_html" {
 }
 
 ###############################################################################
+# SPA route rewrite — replaces the old distribution-wide custom_error_response
+#
+# custom_error_response applies to EVERY behavior, including /api/*: any API
+# 403/404 was rewritten to the SPA shell and returned as HTTP 200 text/html,
+# breaking JSON error handling for API clients (proven live 2026-07-11:
+# GET /api/<unknown> returned 200 + <!DOCTYPE html>). Instead, rewrite SPA
+# client routes to /index.html BEFORE S3 sees them, on the DEFAULT behavior
+# only — S3 then never 404s for client routes, and /api/* errors pass through
+# untouched.
+#
+# Heuristic: extensionless URIs are SPA client routes (/, /community, /arena,
+# /share/<handle>, /privacy, …). Share handles are dot-free by construction
+# (shareIdentity.ts strips to [a-z0-9-]); every real static file has an
+# extension. A genuinely missing DOTTED file now returns S3's raw 403 (OAC
+# grants GetObject only, no ListBucket) instead of masquerading as the SPA —
+# the more correct behavior.
+###############################################################################
+resource "aws_cloudfront_function" "spa_route_rewrite" {
+  name    = "scast-spa-route-rewrite"
+  runtime = "cloudfront-js-2.0"
+  comment = "Rewrite extensionless SPA client routes to /index.html (default behavior only)"
+  publish = true
+  code    = <<-EOT
+    function handler(event) {
+      var request = event.request;
+      if (!request.uri.includes('.')) {
+        request.uri = '/index.html';
+      }
+      return request;
+    }
+  EOT
+}
+
+###############################################################################
 # Distribution
 ###############################################################################
 resource "aws_cloudfront_distribution" "frontend" {
@@ -256,8 +290,10 @@ resource "aws_cloudfront_distribution" "frontend" {
   }
 
   # --- Default behavior: SPA shell / unmatched routes -> S3, no-cache ---------
-  # Unmatched client-side routes 404 at S3 and are rewritten to index.html by the
-  # custom_error_response blocks below, so the default response must be no-cache.
+  # The spa_route_rewrite function maps extensionless client routes to
+  # /index.html at viewer-request time (see its banner comment), so S3 serves
+  # the shell directly with HTTP 200 and no distribution-wide error rewrite is
+  # needed. The default response must stay no-cache.
   default_cache_behavior {
     target_origin_id       = "s3-frontend"
     viewer_protocol_policy = "redirect-to-https"
@@ -267,6 +303,11 @@ resource "aws_cloudfront_distribution" "frontend" {
 
     cache_policy_id            = data.aws_cloudfront_cache_policy.caching_disabled.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.no_cache_html.id
+
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.spa_route_rewrite.arn
+    }
   }
 
   # --- /api/* -> Railway backend, no cache, forward everything ----------------
@@ -325,20 +366,10 @@ resource "aws_cloudfront_distribution" "frontend" {
     }
   }
 
-  # --- SPA routing: 403/404 from S3 -> index.html with HTTP 200 ---------------
-  custom_error_response {
-    error_code            = 403
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
-
-  custom_error_response {
-    error_code            = 404
-    response_code         = 200
-    response_page_path    = "/index.html"
-    error_caching_min_ttl = 0
-  }
+  # SPA routing is handled by the spa_route_rewrite viewer-request function on
+  # the default behavior. Deliberately NO custom_error_response here: it would
+  # apply to every behavior including /api/*, turning API 403/404 JSON errors
+  # into 200 text/html (the post-cutover regression this replaced).
 
   restrictions {
     geo_restriction {
