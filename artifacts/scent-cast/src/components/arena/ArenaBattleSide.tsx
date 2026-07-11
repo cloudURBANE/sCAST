@@ -187,15 +187,20 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
           ) : null}
         </div>
 
-        <div className="mt-2.5 flex min-w-0 flex-col text-center sm:mt-3">
+        <div className="mt-2.5 flex min-w-0 flex-1 flex-col text-center sm:mt-3">
           {/* Equal-height brand row so a missing brand on one side doesn't
-              shift its name/descriptor relative to the other card. */}
-          <div className="flex min-h-[1.05rem] items-center justify-center sm:min-h-[1.4rem]">
+              shift its name/descriptor relative to the other card. On phones the
+              slot reserves TWO brand lines (long houses like "Maison Francis
+              Kurkdjian" wrap at half-card width even at the xlong bucket size) —
+              a min-h sized for one line doesn't cap the wrap, so the wrapped
+              side used to push its name/stats/vote rows out of alignment with
+              the other contender. */}
+          <div className="flex min-h-[1.5rem] items-center justify-center sm:min-h-[1.4rem]">
             {side.brand ? (
               <BrandGoldLabel
                 as="p"
                 brand={side.brand}
-                className="scent-card-brand scent-arena-brand mx-auto block max-w-full"
+                className="scent-card-brand scent-arena-brand mx-auto block max-w-full line-clamp-2"
                 shimmer={false}
               />
             ) : (
@@ -211,12 +216,21 @@ export const ArenaBattleSide: React.FC<ArenaBattleSideProps> = ({
               {side.name}
             </h2>
           </div>
-          <p className="mx-auto mt-1 line-clamp-2 min-h-[2rem] max-w-sm text-[11px] font-medium leading-4 text-scent-text-muted sm:mt-2 sm:min-h-[2.5rem] sm:text-sm sm:leading-5">
+          {/* flex-1 here (plus flex-1 on the parent column) absorbs any residual
+              wrap-height difference between the two contender cards, so the
+              stats tile, Add Beam Power, and Vote rows always sit at the same
+              height on both sides. whitespace-nowrap keeps "Beam Power" from
+              folding into the neighboring cell at 320px. */}
+          <p className="mx-auto mt-1 line-clamp-2 min-h-[2rem] max-w-sm flex-1 text-[11px] font-medium leading-4 text-scent-text-muted sm:mt-2 sm:min-h-[2.5rem] sm:text-sm sm:leading-5">
             {side.descriptor}
           </p>
-          <div className="mt-2 grid grid-cols-2 gap-1 rounded-lg border border-white/8 bg-black/20 p-1.5 text-center">
-            <div><span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle sm:text-[9px]">Supporters</span><strong className="mt-0.5 block text-xs text-foreground sm:text-sm">{side.beamSupporters}</strong></div>
-            <div><span className="block text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle sm:text-[9px]">Beam Power</span><strong className="mt-0.5 block text-xs text-scent-accent sm:text-sm">{side.totalBeamPower}</strong></div>
+          {/* Below 400px the half-card cell (~52px) can't hold "BEAM POWER" on
+              one line — it either wraps into a ragged two-line label or (with
+              nowrap) collides with the neighboring cell. Stack the two stats as
+              full-width rows there; side-by-side resumes at min-[400px]. */}
+          <div className="mt-2 grid gap-1 rounded-lg border border-white/8 bg-black/20 p-1.5 text-center min-[400px]:grid-cols-2">
+            <div><span className="block whitespace-nowrap text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle sm:text-[9px]">Supporters</span><strong className="mt-0.5 block text-xs text-foreground sm:text-sm">{side.beamSupporters}</strong></div>
+            <div><span className="block whitespace-nowrap text-[8px] uppercase tracking-[0.08em] text-scent-text-subtle sm:text-[9px]">Beam Power</span><strong className="mt-0.5 block text-xs text-scent-accent sm:text-sm">{side.totalBeamPower}</strong></div>
           </div>
           <button
             type="button"

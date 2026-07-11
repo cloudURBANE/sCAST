@@ -149,13 +149,16 @@ function CompareColumn({
         />
       </div>
 
-      <div className="mt-2.5 flex min-w-0 flex-col text-center">
-        <div className="flex min-h-[1.05rem] items-center justify-center sm:min-h-[1.4rem]">
+      {/* flex-1 + the two-line phone brand slot keep both columns' House/Family
+          rows and Vote buttons level when one brand wraps and the other doesn't
+          (same alignment contract as ArenaBattleSide). */}
+      <div className="mt-2.5 flex min-w-0 flex-1 flex-col text-center">
+        <div className="flex min-h-[1.5rem] items-center justify-center sm:min-h-[1.4rem]">
           {side.brand ? (
             <BrandGoldLabel
               as="p"
               brand={side.brand}
-              className="scent-card-brand scent-arena-brand mx-auto block max-w-full"
+              className="scent-card-brand scent-arena-brand mx-auto block max-w-full line-clamp-2"
               shimmer={false}
             />
           ) : (

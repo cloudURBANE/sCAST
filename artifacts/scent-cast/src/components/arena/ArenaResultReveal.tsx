@@ -102,16 +102,22 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
         ].join(" ")}
         aria-label={`${pickedSide.name} is your pick at ${pickedPercent} percent. ${battle.left.name} has ${leftPercent} percent from ${leftCount} votes. ${battle.right.name} has ${rightPercent} percent from ${rightCount} votes. ${voteStatus}`}
       >
+        {/* justify-* must live in exactly one branch: emitting justify-start
+            on the base AND justify-end in a branch lets CSS order (not class
+            order) pick the winner. min-w-0 + max-w-full on the pill let it
+            shrink inside this capped wrapper — a nested flex row otherwise
+            refuses to go below its nowrap text width, shoving the Save button
+            off the card edge on phones. */}
         {guestLocalOnly ? (
           <div
             className={[
-              "absolute top-3 z-20 flex justify-start sm:top-4",
+              "absolute top-3 z-20 flex sm:top-4",
               showCheckpoint
-                ? "left-3 max-w-[calc(60%-1rem)] sm:left-4"
+                ? "left-3 max-w-[calc(60%-1rem)] justify-start sm:left-4"
                 : "right-3 max-w-[calc(100%-1.5rem)] justify-end sm:right-4",
             ].join(" ")}
           >
-            <div className="inline-flex min-h-8 items-center gap-2 rounded-full bg-black/54 px-2.5 py-1 text-left shadow-[inset_0_0_0_1px_rgba(212,175,55,0.14)] backdrop-blur">
+            <div className="inline-flex min-h-8 min-w-0 max-w-full items-center gap-2 rounded-full bg-black/54 px-2.5 py-1 text-left shadow-[inset_0_0_0_1px_rgba(212,175,55,0.14)] backdrop-blur">
               <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-scent-accent/[0.12] text-scent-accent">
                 <LockKeyhole size={12} strokeWidth={1.9} aria-hidden="true" />
               </span>
