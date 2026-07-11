@@ -11,6 +11,13 @@ definitions; its IDs — S1…S9, E1…E9, X1…X4 — are reused here).
 monitoring/Sentry work, production deployment evidence, and the completed
 database restore validations. AWS/Terraform ownership remained out of scope.
 
+**Addendum (same day, PR #600):** the AWS/Terraform-owned gaps called out
+below are now implemented in-repo: CSP `report-uri` plumbing
+(`infra/variables.tf` → `csp_report_uri`), a `web` monitor probe through the
+canonical CloudFront `/api/*` path, a post-deploy Chromium smoke in
+`deploy-frontend`, and the missing `VITE_SENTRY_DSN` pass-through to the AWS
+frontend build (see the S4/L2/L6 and sCAST-Sentry notes below).
+
 **Two different finish lines** (the owner asked for these to be separated):
 
 - **Ready to USE** — a real user can install the PWA / open the site, sign in,
@@ -35,7 +42,7 @@ database restore validations. AWS/Terraform ownership remained out of scope.
 | **Deploy pipeline** | **~95%** | High | `deploy-frontend` main run `29128275763` succeeded for merge `c4ff605`; `scentbeam.com` now responds through CloudFront/AmazonS3; Railway deployments for API and engine are healthy |
 | **Operations** (monitoring, backups, runbooks) | **~90%** | High | Three Sentry projects are live; repository readiness monitoring runs every five minutes; both DB restore paths were validated. External phone/SMS escalation and CSP collection remain open |
 | **Ready to USE (10–20 user beta)** | **~95%** | High | Core launch engineering and repository operations are live; remaining blockers are dashboard confirmation and alert-channel work |
-| **Ready to USE (open/public, hundreds of users)** | **~85%** | Medium-high | CSP has no collection endpoint yet; external escalation, capacity evidence, and a focused browser smoke remain |
+| **Ready to USE (open/public, hundreds of users)** | **~85%** | Medium-high | CSP collection plumbing shipped (PR #600) but not applied/verified; external escalation and capacity evidence remain; browser smoke ships with PR #600 |
 | **Ready to SELL** | **~55%** | Medium | Affiliate rails are coded and legally disclosed, but no payment infra exists, affiliate program approvals are unverifiable from the repo, and revenue attribution is minimal |
 
 **How to read the confidence column:** "High" = every claim in that row was
@@ -65,7 +72,7 @@ cross-cutting gaps. The "readiness gap fixes" PRs (sCAST #581/#582, engine
 | S9 legacy token expiry | ✅ **Closed** | `0002` migration backfills via `COALESCE(token_issued_at, now())` |
 | S8 Redis optional at 1 replica | ✅ Accepted | unchanged, documented, trigger-based revisit |
 | Reimagine cost exposure (June image-cost audit) | ✅ **Closed** | `routes/scent.ts:684-701` — per-IP `reimagineRateLimit`, `ENABLE_REIMAGINE` kill-switch, busy-server 429, usage ledger |
-| sCAST Sentry | ✅ **Closed** | [sCAST PR #594](https://github.com/cloudURBANE/sCAST/pull/594) (`2967b62`), Railway deployment `a93b22b6-e8b3-4ddf-bb02-6e573b37644a`, API startup log, React project `4511713045381121`, API project `4511713056063488`, and both synthetic ingestion checks returned HTTP 200 |
+| sCAST Sentry | ⚠️ **API closed / SPA half-open** | [sCAST PR #594](https://github.com/cloudURBANE/sCAST/pull/594) (`2967b62`), Railway deployment `a93b22b6-e8b3-4ddf-bb02-6e573b37644a`, API startup log, React project `4511713045381121`, API project `4511713056063488`, and both synthetic ingestion checks returned HTTP 200. **However:** synthetic ingestion proves the Sentry *projects* accept events, not that the deployed SPA sends them — #594 passed the DSN only through the Dockerfile (Railway self-host path), `deploy-frontend` (which builds the bundle CloudFront serves) did not, and the live `assets/index-*.js` contains no ingest URL. PR #600 adds `VITE_SENTRY_DSN` (repo variable) to that build; **owner: set the variable** to the React project's DSN |
 | S5 database restore | ✅ **Functional restore verified** | 2026-05-06 restored backup validation: `users=4`, `user_fragrances=23`, `user_settings=4`, `global_fragrances=36`, with clean orphan/duplicate checks. Historical RTO was not timed; see `docs/DR_RUNBOOK.md` |
 
 ### srt-scent-engine
@@ -113,7 +120,10 @@ Terraform files were changed during this reconciliation.
 `https://srt-scent-engine-production.up.railway.app/readyz` every five minutes,
 including the distinct JSON contracts. It opens/reopens one stable incident per
 service, closes it after recovery, and fails the run for Actions notifications.
-Main dispatch run `29128285938` passed. **External SMS/phone escalation remains
+Main dispatch run `29128285938` passed. PR #600 adds a third `web` probe —
+the same Express contract through the canonical CloudFront `/api/*` proxy —
+so a CDN/proxy breakage is distinguishable from a Railway outage.
+**External SMS/phone escalation remains
 owner-blocked**: connect an external monitor or notification integration and
 test the escalation channel without deliberately taking production down.
 
@@ -144,14 +154,19 @@ and requires the Actions `test` check on `main`.
 response carried `Content-Security-Policy-Report-Only`, but the policy had no
 `report-uri`/`report-to`, and the response had no `Reporting-Endpoints` or
 `Report-To` header. There is therefore no collection endpoint to test or recent
-violation stream to inspect. Keep enforcement off. The CSP owner is
-`infra/cloudfront.tf` (AWS/Terraform-owned and out of scope here); its owner must
-add and deploy a real collector, confirm accepted reports, then bake at least
-one violation-free week before considering enforcement.
+violation stream to inspect. Keep enforcement off. The collector plumbing now
+exists in-repo (PR #600): `infra/variables.tf` takes `csp_report_uri`, appended
+to the policy as a `report-uri` directive (recipe for deriving the Sentry
+security endpoint from the React project's DSN is in
+`terraform.tfvars.example`). **Owner:** set it in `terraform.tfvars`,
+`terraform apply`, confirm accepted reports, then bake at least one
+violation-free week before considering enforcement.
 
 ### Explicitly NOT blocking the beta (do during/after)
-- **Playwright E2E smoke** (S4 remainder) — integration tests + green CI cover
-  the beta; add one browser smoke on `main` merges during the beta window.
+- **Playwright E2E smoke** (S4 remainder) — ✅ browser half shipped in PR #600:
+  every `main` deploy now ends in a real-Chromium smoke (SPA mounts on `/` and
+  `/arena` with no page errors; readyz contract holds through the CloudFront
+  proxy). The login → wardrobe round-trip stays manual (real Google account).
 - **Engine Chromium pin refresh** (E7) — mitigated by `DISABLE_CHROMIUM_MINT=1`
   on the web service; verify that flag in Railway config when walking L4.
 - **Redis / multi-replica** (S8) — single replica is correct at this scale.
@@ -283,10 +298,12 @@ The percentage claims in §1 assume the remaining owner actions are completed:
 - [x] Engine repo `main` protection strictly requires the `test` check
 - [x] Repository five-minute uptime monitor active; main run `29128285938`
 - [x] Both database restore paths functionally verified; engine timing recorded, sCAST historical RTO unavailable
-- [ ] **Owner:** verify Google OAuth production redirect URI in Google Cloud Console
+- [ ] **Owner:** verify Google OAuth production redirect URI in Google Cloud Console, then hand smoke-test sign-in → search → add-to-wardrobe → reload on the live domain
 - [ ] **Owner:** connect and test external SMS/phone escalation (repository monitoring is complete)
-- [ ] **AWS/Terraform owner:** configure CSP report collection, verify accepted reports, and inspect a real bake before enforcement
+- [ ] **Owner:** set the `VITE_SENTRY_DSN` repo variable (React project DSN) so the CloudFront-served bundle actually initializes Sentry — the build wiring lands with PR #600
+- [ ] **Owner:** set `csp_report_uri` in `infra/terraform.tfvars` + `terraform apply` (plumbing in PR #600), verify accepted reports, and inspect a real bake before enforcement
 - [ ] **Owner:** confirm Rakuten/CJ/Amazon Associates approvals and populate/verify approved live `affiliate_links`
+- [ ] **Owner (per the cutover runbook):** raise DNS TTLs back to 3600 after 1–2 stable days; rotate the Porkbun + AWS keys that passed through chat; decommission Vercel per `CUTOVER.md` §7 only after ≥7 stable days
 
 ---
 

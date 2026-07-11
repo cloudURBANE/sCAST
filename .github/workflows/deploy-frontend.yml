@@ -96,9 +96,15 @@ jobs:
       # commit being deployed (jobs run on separate runners; no shared state).
       # Stamp the SPA build with the deployed commit: webVitalsTelemetry.ts
       # falls back to VITE_GIT_SHA now that Vercel's injected SHA is gone.
+      #
+      # VITE_SENTRY_DSN: repo variable (not a secret — the DSN ships in the
+      # public bundle by design). When unset, main.tsx skips the Sentry chunk
+      # entirely; #594 only wired this into the Dockerfile path, so without it
+      # here the canonical AWS deployment has no frontend error tracking.
       - run: pnpm run build:web
         env:
           VITE_GIT_SHA: ${{ github.sha }}
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
 
       # Assume the deploy role via OIDC. No access keys are stored anywhere;
       # the short-lived credentials come from the GitHub OIDC token.
@@ -160,3 +166,31 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
             --paths "/index.html" "/" "/site.webmanifest" "/community" "/arena"
+
+  # ---------------------------------------------------------------------------
+  # Post-deploy browser smoke (readiness gap S4, browser half): real Chromium
+  # loads the canonical host, the SPA must mount, the /arena deep route must
+  # render, and the /api/* proxy must return the readyz contract. The full
+  # login → wardrobe E2E needs a real Google account and stays manual.
+  # ---------------------------------------------------------------------------
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      # Install the playwright library OUTSIDE the repo tree: the repo's
+      # preinstall hook rejects npm, and the smoke needs no workspace deps.
+      # The script is CommonJS and resolves playwright via NODE_PATH (ESM
+      # resolution ignores NODE_PATH, require() honors it).
+      - name: Install Playwright Chromium
+        run: |
+          npm install --prefix "$RUNNER_TEMP/pw" "playwright@^1.49.0"
+          "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
+
+      - name: Browser smoke against the live host
+        run: NODE_PATH="$RUNNER_TEMP/pw/node_modules" node .github/scripts/smoke-browser.cjs --base-url https://scentbeam.com

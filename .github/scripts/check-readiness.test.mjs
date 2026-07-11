@@ -19,6 +19,15 @@ test("accepts the API readiness contract", async () => {
   assert.equal(result.ok, true);
 });
 
+test("accepts the web (CloudFront proxy) readiness contract", async () => {
+  const result = await evaluateReadiness(
+    "web",
+    "https://scentbeam.com/api/readyz",
+    jsonResponse({ status: "ready", checks: { db: "ok", redis: "ok" } }),
+  );
+  assert.equal(result.ok, true);
+});
+
 test("accepts the engine readiness contract", async () => {
   const result = await evaluateReadiness(
     "engine",

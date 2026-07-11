@@ -42,6 +42,14 @@ jobs:
             --output "$RUNNER_TEMP/readiness-engine.json"
           if [[ $? -ne 0 ]]; then any_failed=1; fi
 
+          # Canonical user path: the same Express readyz through the CloudFront
+          # /api/* proxy — distinguishes "Railway down" from "CDN proxy broken".
+          node .github/scripts/check-readiness.mjs \
+            --service web \
+            --url https://scentbeam.com/api/readyz \
+            --output "$RUNNER_TEMP/readiness-web.json"
+          if [[ $? -ne 0 ]]; then any_failed=1; fi
+
           echo "any_failed=$any_failed" >> "$GITHUB_OUTPUT"
           exit 0
 
@@ -52,7 +60,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for service in api engine; do
+          for service in api engine web; do
             result_file="$RUNNER_TEMP/readiness-${service}.json"
             healthy=$(jq -r '.ok' "$result_file")
             summary=$(jq -r '.summary' "$result_file")

@@ -88,6 +88,17 @@ variable "csp_enforce" {
   default     = false
 }
 
+variable "csp_report_uri" {
+  description = "Optional endpoint CSP violation reports are POSTed to (report-uri directive). Without it, Report-Only violations surface nowhere and the csp_enforce bake period cannot be observed. Use the Sentry security endpoint derived from the SPA project's DSN: https://oORG_ID.ingest.sentry.io/api/PROJECT_ID/security/?sentry_key=PUBLIC_KEY. Empty (default) omits the directive."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.csp_report_uri == "" || startswith(var.csp_report_uri, "https://")
+    error_message = "csp_report_uri must be empty or an https:// URL."
+  }
+}
+
 variable "cloudfront_price_class" {
   description = "CloudFront price class. PriceClass_100 = US/CA/EU edges only (cheapest); PriceClass_All = all edges worldwide."
   type        = string

@@ -36,3 +36,15 @@ route53_zone_id = ""
 
 # CloudFront price class: PriceClass_100 (US/CA/EU, cheapest) | PriceClass_200 | PriceClass_All
 # cloudfront_price_class = "PriceClass_100"
+
+# OPTIONAL but required before flipping csp_enforce: where CSP violation
+# reports are POSTed (report-uri directive). Use the Sentry security endpoint
+# derived from the SPA project's DSN — for DSN
+#   https://PUBLIC_KEY@oORG_ID.ingest.sentry.io/PROJECT_ID
+# the report endpoint is
+#   https://oORG_ID.ingest.sentry.io/api/PROJECT_ID/security/?sentry_key=PUBLIC_KEY
+# csp_report_uri = ""
+
+# Ship the CSP as enforcing (true) instead of Report-Only (false, default).
+# Flip ONLY after ≥1 week of violation-free reports from real traffic.
+# csp_enforce = false

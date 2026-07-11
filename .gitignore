@@ -88,6 +88,13 @@ Thumbs.db
 !.env.example
 ScentCast.env
 
+# Terraform local working dir + state (state may embed sensitive values;
+# the lock file infra/.terraform.lock.hcl IS tracked on purpose)
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfvars
+
 # Local Supabase DB dumps (large; may contain sensitive data)
 supabase-clean-backup-*/
 
