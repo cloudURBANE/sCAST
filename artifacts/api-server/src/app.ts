@@ -158,6 +158,15 @@ if (isModelConfigured()) {
   );
 }
 
+// Unknown /api paths must return a JSON 404 — registered after every /api
+// mount so it only catches misses. Without it, a GET to a nonexistent /api
+// route falls through to the SPA static fallback below and returns the HTML
+// shell with HTTP 200 (observed live on scentbeam.com), which breaks JSON
+// error handling in API clients.
+app.use("/api", (_req, res) => {
+  res.status(404).json({ error: "Not Found" });
+});
+
 const serveFrontendUnavailable: RequestHandler = (req, res, next) => {
   if ((req.method !== "GET" && req.method !== "HEAD") || req.path.startsWith("/api")) {
     next();
