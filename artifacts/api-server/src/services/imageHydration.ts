@@ -1,6 +1,7 @@
 import { getCatalogEntry, searchCatalog } from "./catalogService";
 import { isLikelySameFragranceIdentity } from "./fragranceNameResolver";
 import { resolveCachedFragranceImage } from "./imagePipeline";
+import { isCrawledImageProvenance } from "./imageProvenanceCore";
 import { safeImageUrlForResponse } from "./persistenceGuards";
 export { usableImageUrlForResponse } from "./imageReference";
 import { usableImageUrlForResponse } from "./imageReference";
@@ -21,12 +22,16 @@ export type SharedImageReference = {
 async function catalogProfileImageReference(profile: Record<string, unknown> | null | undefined): Promise<SharedImageReference | null> {
   const imageUrl = await usableImageUrlForResponse(profile?.imageUrl);
   if (!imageUrl) return null;
-  return {
+  const ref = {
     imageUrl,
     sourceProvider: typeof profile?.sourceProvider === "string" ? profile.sourceProvider : null,
     sourceUrl: typeof profile?.sourceUrl === "string" ? profile.sourceUrl : null,
     storagePath: typeof profile?.storagePath === "string" ? profile.storagePath : null,
   };
+  // A catalog profile that persisted the crawled Fragrantica fallback offers no
+  // shared image — the fallback is owner-rejected for display everywhere.
+  if (isCrawledImageProvenance(ref)) return null;
+  return ref;
 }
 
 /**
@@ -43,7 +48,7 @@ export async function resolveSharedImageReference(
     // catalog URLs so older persisted refs cannot pin production to stale
     // processed objects after the pipeline has produced a newer clean image.
     const cached = await resolveCachedFragranceImage(brand, name);
-    if (cached?.backgroundRemoved && hasImageUrl(cached.imageUrl)) {
+    if (cached?.backgroundRemoved && hasImageUrl(cached.imageUrl) && !isCrawledImageProvenance(cached)) {
       return {
         imageUrl: cached.imageUrl,
         sourceProvider: cached.sourceProvider,

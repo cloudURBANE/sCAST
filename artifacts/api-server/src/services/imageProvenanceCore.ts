@@ -39,13 +39,21 @@ export type ImageProvenanceRef = {
   sourceProvider?: string | null;
   sourceUrl?: string | null;
   storagePath?: string | null;
+  /**
+   * The candidate's DISPLAY url (row `imageUrl` / cache `publicUrl`). Processed
+   * pipeline objects always live on our own storage, so a display url that is
+   * itself a Fragrantica url is by definition the raw crawled fallback, and one
+   * under images/processed/crawled/ is its processed copy.
+   */
+  imageUrl?: string | null;
 };
 
 /**
  * True when an image ref is (or predates but matches) the engine-crawled
  * Fragrantica fallback. A "serper" ref is never crawled — the Serper scorer may
  * legitimately pick a fimgs.net candidate as the best available packshot, and
- * that scored choice keeps serper trust.
+ * that scored choice keeps serper trust (its *display* url is still one of our
+ * processed storage objects; only the sourceUrl points at fimgs).
  */
 export function isCrawledImageProvenance(
   ref: ImageProvenanceRef | null | undefined,
@@ -56,8 +64,26 @@ export function isCrawledImageProvenance(
   if (provider === CRAWLED_SOURCE_PROVIDER) return true;
   const storagePath = typeof ref.storagePath === "string" ? ref.storagePath.toLowerCase() : "";
   if (storagePath.includes(CRAWLED_STORAGE_SEGMENT)) return true;
+  const displayUrl = typeof ref.imageUrl === "string" ? ref.imageUrl.toLowerCase() : "";
+  if (displayUrl.includes(CRAWLED_STORAGE_SEGMENT)) return true;
+  // A raw Fragrantica url as the display url is the un-processed fallback
+  // itself, whatever provider label the row carries.
+  if (isFragranticaImageUrl(displayUrl || undefined)) return true;
   if (provider === "serper") return false;
   // Legacy window: engine-crawled Fragrantica images stamped "manual".
   const looksManual = provider === "manual" || storagePath.includes(MANUAL_STORAGE_SEGMENT);
   return looksManual && isFragranticaImageUrl(ref.sourceUrl ?? undefined);
+}
+
+/**
+ * Display gate for the owner-rejected Fragrantica fallback: vault tiles, share
+ * cards, and API responses must never surface it. Returns "" for a crawled/raw
+ * Fragrantica image reference so callers fall back to their honest
+ * placeholder ("Fetching…"/"No image") while the Serper self-heal upgrades the
+ * row, and passes every other url through unchanged.
+ */
+export function displayableImageUrl(ref: ImageProvenanceRef | null | undefined): string {
+  const url = typeof ref?.imageUrl === "string" ? ref.imageUrl.trim() : "";
+  if (!url) return "";
+  return isCrawledImageProvenance({ ...ref, imageUrl: url }) ? "" : url;
 }

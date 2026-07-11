@@ -181,7 +181,7 @@ test("chooseHydratedImageUrlWithMetadata keeps a genuinely manual shared image o
   );
 });
 
-test("chooseHydratedImageUrlWithMetadata keeps the row image when both candidates are crawled", () => {
+test("chooseHydratedImageUrlWithMetadata returns empty when both candidates are crawled (the fallback is never displayable)", () => {
   assert.equal(
     chooseHydratedImageUrlWithMetadata(
       {
@@ -191,7 +191,44 @@ test("chooseHydratedImageUrlWithMetadata keeps the row image when both candidate
       },
       { imageUrl: "https://cdn.example.com/fg-row.webp", sourceProvider: "crawled" },
     ),
-    "https://cdn.example.com/fg-row.webp",
+    "",
+  );
+});
+
+test("chooseHydratedImageUrlWithMetadata returns empty when the only candidate is crawled", () => {
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      null,
+      { imageUrl: "https://cdn.example.com/fg-row.webp", sourceProvider: "crawled" },
+    ),
+    "",
+  );
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      { imageUrl: "https://cdn.example.com/fg-shared.webp", sourceProvider: "crawled" },
+      null,
+    ),
+    "",
+  );
+});
+
+test("chooseHydratedImageUrlWithMetadata treats a raw Fragrantica display url as the crawled fallback even with no provider metadata", () => {
+  // A client payload that persisted the engine's image_url verbatim: the row's
+  // display url IS the raw fimgs.net image. It must never win over a processed
+  // shared image, and alone it must blank rather than display.
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      { imageUrl: "https://cdn.example.com/serper.webp", sourceProvider: "serper" },
+      { imageUrl: "https://fimgs.net/mdimg/perfume/375x500.10421.jpg" },
+    ),
+    "https://cdn.example.com/serper.webp",
+  );
+  assert.equal(
+    chooseHydratedImageUrlWithMetadata(
+      null,
+      { imageUrl: "https://fimgs.net/mdimg/perfume/375x500.10421.jpg" },
+    ),
+    "",
   );
 });
 

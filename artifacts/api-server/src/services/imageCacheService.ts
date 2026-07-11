@@ -388,6 +388,18 @@ export async function getLatestReadyCachedImageByLookupKey(
           eq(imageCacheTable.lookupKey, lookupKey),
           eq(imageCacheTable.pipelineVersion, pipelineVersion),
           eq(imageCacheTable.processingStatus, "ready"),
+          // The crawled Fragrantica fallback (and legacy copies stamped
+          // "manual" but sourced from a Fragrantica url) is owner-rejected for
+          // display and excluded outright — not just demoted. This also lets
+          // the pipeline's lookup-cache consult fall through to a fresh Serper
+          // search instead of short-circuiting on a legacy crawled row.
+          // Mirrors isCrawledImageProvenance in imageProvenanceCore.ts.
+          sql`not (
+            ${imageCacheTable.sourceProvider} = 'crawled'
+            or (${imageCacheTable.sourceProvider} = 'manual'
+              and (${imageCacheTable.sourceUrl} ilike '%fimgs.net%'
+                or ${imageCacheTable.sourceUrl} ilike '%fragrantica.%'))
+          )`,
         ),
       )
       .orderBy(

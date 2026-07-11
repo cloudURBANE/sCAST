@@ -21,6 +21,7 @@ import { globalFragrancesTable, imageCacheTable } from "@workspace/db/schema";
 import { and, desc, eq, inArray, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { makeLookupKey } from "./catalogService";
 import { IMAGE_PIPELINE_VERSION } from "./imageIdentity";
+import { displayableImageUrl, isCrawledImageProvenance } from "./imageProvenanceCore";
 
 export {
   chooseHydratedImageUrl,
@@ -124,7 +125,20 @@ export function normalizeFragrance(fragrance: Record<string, any>): Record<strin
   const name = fragrance.name || product?.name;
   const brand = fragrance.brand || product?.brand;
   const perfumer = fragrance.perfumer || product?.perfumer;
-  const imageUrl = safeImageUrlForResponse(resolveCanonicalImageUrl(fragrance));
+  // Display gate: the crawled Fragrantica fallback (raw fimgs.net/fragrantica.*
+  // url or a processed images/processed/crawled/ copy) is owner-rejected and
+  // must never surface as a row's image — normalize runs on both the read and
+  // write paths, so gating here also stops new rows from persisting it.
+  // Deliberately NO sourceUrl: on wardrobe rows `sourceUrl`/`source_url` is the
+  // fragrance PAGE url (fragrantica.* for nearly every row), not the image's
+  // source, and passing it would misclassify legitimate manual images through
+  // the legacy manual+Fragrantica rule (hydrateImageUrl omits it for the same
+  // reason).
+  const imageUrl = displayableImageUrl({
+    imageUrl: safeImageUrlForResponse(resolveCanonicalImageUrl(fragrance)),
+    sourceProvider: typeof fragrance.sourceProvider === "string" ? fragrance.sourceProvider : null,
+    storagePath: typeof fragrance.storagePath === "string" ? fragrance.storagePath : null,
+  });
   const imageAdjustment = normalizeImageAdjustment(fragrance.imageAdjustment);
   const identity =
     typeof name === "string" && typeof brand === "string"
@@ -320,6 +334,19 @@ export async function batchHydrateImageUrls(
   const imageCacheMap = new Map<string, HydratedImageCandidate>();
   for (const row of imageCacheRows) {
     if (!row.lookupKey || imageCacheMap.has(row.lookupKey)) continue;
+    // Never offer the crawled Fragrantica fallback as a shared candidate — a
+    // key whose only cache rows are crawled simply gets no shared image and the
+    // tile keeps its honest placeholder until the Serper self-heal lands.
+    if (
+      isCrawledImageProvenance({
+        sourceProvider: row.sourceProvider,
+        sourceUrl: row.sourceUrl,
+        storagePath: row.storagePath,
+        imageUrl: row.publicUrl,
+      })
+    ) {
+      continue;
+    }
     const url = await usableImageUrlForResponse(row.publicUrl);
     if (url) {
       const imageProperties =
@@ -348,6 +375,20 @@ export async function batchHydrateImageUrls(
   for (const row of catalogRows) {
     if (!row.lookupKey) continue;
     const profile = row.profileData as Record<string, unknown> | null;
+    // Same gate as the cache map: a catalog profile that saved the crawled
+    // Fragrantica fallback contributes no shared image. (The catalog's
+    // sourceUrl here IS the image's source url — it is written from the
+    // processed image ref, not from the fragrance page.)
+    if (
+      isCrawledImageProvenance({
+        sourceProvider: typeof profile?.sourceProvider === "string" ? profile.sourceProvider : null,
+        sourceUrl: typeof profile?.sourceUrl === "string" ? profile.sourceUrl : null,
+        storagePath: typeof profile?.storagePath === "string" ? profile.storagePath : null,
+        imageUrl: typeof profile?.imageUrl === "string" ? profile.imageUrl : null,
+      })
+    ) {
+      continue;
+    }
     const url = await usableImageUrlForResponse(profile?.imageUrl);
     if (url) {
       catalogMap.set(row.lookupKey, {

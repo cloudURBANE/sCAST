@@ -937,14 +937,12 @@ export const FragranceCapture: React.FC<{
       );
       const detailDescription =
         typeof detail.raw?.description === 'string' ? detail.raw.description : undefined;
-      // The engine has already resolved a real (Decodo-crawled) bottle image for
-      // this fragrance. Forward it as the pipeline's FALLBACK: the server runs
-      // the scored Serper image search first (the optimal packshot) and only
-      // processes this known URL when that search yields nothing — so an empty
-      // Serper result can't leave the new add permanently "no image". Without
-      // this passthrough the engine's image is discarded and the tile depends
-      // entirely on the flaky Serper leg.
-      const detailImageUrl = firstString(detail.imageUrl, detail.image_url);
+      // NOTE: the engine's crawled bottle image (detail.imageUrl / image_url —
+      // the Fragrantica share image) is deliberately NOT forwarded. It is
+      // owner-rejected for display site-wide (a data-source giveaway that never
+      // matches the processed vault packshots), and the server no longer
+      // processes it as an image fallback: the scored Serper search is the only
+      // automatic image source, with its own background retry/self-heal.
 
       const profileRes = await fetch(SCENT_PROFILE_ENDPOINT, {
         method: 'POST',
@@ -957,7 +955,6 @@ export const FragranceCapture: React.FC<{
           ...(detailFamily ? { family: detailFamily } : {}),
           ...(detailDescription ? { description: detailDescription } : {}),
           ...(detailPerfumer ? { perfumer: detailPerfumer } : {}),
-          ...(detailImageUrl ? { imageUrl: detailImageUrl } : {}),
           ...(pyramidNotes.top.length || pyramidNotes.heart.length || pyramidNotes.base.length
             ? { pyramid: pyramidNotes }
             : {}),

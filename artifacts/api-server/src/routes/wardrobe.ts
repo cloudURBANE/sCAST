@@ -22,6 +22,7 @@ import {
 } from "../services/fragrancePayload";
 import { assertNoPersistedBase64Image } from "../services/persistenceGuards";
 import { nonPerfumeSignal } from "../services/nonPerfumeSignal";
+import { isCrawledImageProvenance } from "../services/imageProvenanceCore";
 import { persistableImageReference } from "../services/imageReference";
 import {
   detailRefreshPatchFromBody,
@@ -495,6 +496,13 @@ router.patch("/wardrobe/:id", requireAuth, wardrobeWriteRateLimit, async (req: A
   }
   if (typeof imageUrl === "string" && imageUrl.trim() && !explicitImageUrl) {
     res.status(400).json({ error: "imageUrl must be an http(s) URL or an existing /api/image-objects/... URL" });
+    return;
+  }
+  // The raw Fragrantica image (and its processed crawled copy) is owner-rejected
+  // for display everywhere; refuse it up front with a clear error instead of
+  // letting normalizeFragrance silently blank the pick.
+  if (explicitImageUrl && isCrawledImageProvenance({ imageUrl: explicitImageUrl })) {
+    res.status(400).json({ error: "This image source can't be used for vault bottles. Pick a different image." });
     return;
   }
   if (hasImageAdjustment && !normalizedImageAdjustment) {
