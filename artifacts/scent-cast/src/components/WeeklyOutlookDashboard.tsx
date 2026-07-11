@@ -90,6 +90,20 @@ function dayNumber(iso: string): string {
   return forecastDate(iso)?.toLocaleDateString(undefined, { day: 'numeric' }) ?? '—';
 }
 
+function relativeDayLabel(iso: string): string {
+  const date = forecastDate(iso);
+  if (!date) return 'Daily pick';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  const dayOffset = Math.round((date.getTime() - today.getTime()) / 86_400_000);
+
+  if (dayOffset === 0) return "Today's pick";
+  if (dayOffset === 1) return "Tomorrow's pick";
+  return `${date.toLocaleDateString(undefined, { weekday: 'long' })}'s pick`;
+}
+
 function dedupeLabels(labels: string[]): string[] {
   const seen = new Set<string>();
   return labels.filter((label) => {
@@ -597,44 +611,50 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               for the same reason: at 640–767px the old 27rem cap starved the
               bottle column (a 141px bottle in a 224px slot); the wider row lets
               the square genuinely earn the sm slot height. */}
-          <div className="relative mx-auto mt-[var(--fc-title-hero)] flex h-[11.5rem] w-full max-w-[27rem] items-center justify-between gap-1.5 sm:h-[14rem] sm:max-w-[34rem] sm:gap-3 md:h-[16.5rem] md:max-w-[42rem] md:gap-5 lg:max-w-[46rem]">
-            <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
-            <div className="relative h-full flex-1 overflow-hidden">
-              <ForecastHero
-                plan={activePlan}
-                direction={direction}
-                onSelect={onSelectFragrance}
-              />
+          <div className="relative mx-auto mt-[var(--fc-title-hero)] w-full max-w-[27rem] overflow-hidden rounded-[28px] border border-scent-accent/20 bg-gradient-to-b from-white/[0.045] via-black/20 to-black/35 sm:max-w-[34rem] sm:rounded-[32px] md:max-w-[42rem] lg:max-w-[46rem]">
+            <div className="flex items-center justify-between border-b border-white/[0.055] px-4 py-2.5 sm:px-5 sm:py-3">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-scent-accent/85 sm:text-[10px]">
+                {relativeDayLabel(activePlan.day.date)}
+              </p>
+              <p className="text-[9px] font-medium uppercase tracking-[0.16em] text-scent-text-subtle sm:text-[10px]">
+                {selected + 1} of {Math.min(outlook.length, 7)}
+              </p>
             </div>
-            <ForecastChevron direction="next" onClick={() => go(selected + 1)} />
-          </div>
 
-          {/* Weather + spray metadata as ONE centered inline pill, lifted out of the
-              per-pick text column so the icon and "85° · Thunderstorms · 2 Sprays"
-              read as a single grouped, screen-centered unit that ties the hero to the
-              calendar rather than drifting beside the title. */}
-          {activeMeta.length > 0 ? (
-            <div className="mt-[var(--fc-hero-pill)] flex justify-center">
-              {/* .forecast-meta-pill is now frameless (see index.css) — a plain
-                  inline caption, no border/fill/padding, so it reads as quiet
-                  supporting data rather than a loud bordered control. The glyph
-                  takes the accent tint (like an active tile's glyph) and the
-                  leading accent day token ("TODAY" / "SUN") pins the line to the
-                  SELECTED forecast day, so its weather can never read as
-                  contradicting the current-conditions marquee up top. */}
-              <div className="forecast-meta-pill inline-flex items-center gap-2 text-scent-text-secondary md:gap-2.5">
-                <span className="flex items-center text-scent-accent/75" aria-hidden>
-                  <WeatherGlyph day={activePlan.day} size={14} />
-                </span>
-                <span className="text-[11px] font-medium uppercase tracking-[0.14em] sm:text-[12px] md:text-[13px]">
-                  <span className="text-scent-accent/85">
-                    {isTodayForecastDay(activePlan.day.date) ? 'Today' : dayLabel(activePlan.day.date)}
-                  </span>
-                  {` · ${activeMeta.join(' · ')}`}
-                </span>
+            <div
+              id="scent-forecast-active-panel"
+              role="tabpanel"
+              className="relative flex h-[11.5rem] w-full items-center justify-between gap-1.5 px-1 sm:h-[14rem] sm:gap-3 sm:px-2 md:h-[16.5rem] md:gap-5 md:px-3"
+            >
+              <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
+              <div className="relative h-full flex-1 overflow-hidden">
+                <ForecastHero
+                  plan={activePlan}
+                  direction={direction}
+                  onSelect={onSelectFragrance}
+                />
               </div>
+              <ForecastChevron direction="next" onClick={() => go(selected + 1)} />
             </div>
-          ) : null}
+
+            {/* Weather + spray metadata stays inside the recommendation frame so
+                the bottle, day context, and wear guidance read as one module. */}
+            {activeMeta.length > 0 ? (
+              <div className="flex justify-center px-3 pb-3.5 sm:pb-4">
+                <div className="forecast-meta-pill inline-flex min-h-8 max-w-full items-center gap-2 text-scent-text-secondary md:gap-2.5">
+                  <span className="flex items-center text-scent-accent/75" aria-hidden>
+                    <WeatherGlyph day={activePlan.day} size={14} />
+                  </span>
+                  <span className="truncate text-[10px] font-medium uppercase tracking-[0.12em] sm:text-[12px] sm:tracking-[0.14em] md:text-[13px]">
+                    <span className="text-scent-accent/85">
+                      {isTodayForecastDay(activePlan.day.date) ? 'Today' : dayLabel(activePlan.day.date)}
+                    </span>
+                    {` · ${activeMeta.join(' · ')}`}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+          </div>
 
           {/* One centered "why this bottle today" line — the plain-language factor
               behind the pick (its character + the strongest real reason it was
@@ -672,8 +692,25 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   key={plan.day.date}
                   role="tab"
                   aria-selected={isActive}
+                  aria-controls="scent-forecast-active-panel"
+                  tabIndex={isActive ? 0 : -1}
                   type="button"
                   onClick={() => go(index)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'ArrowRight') {
+                      event.preventDefault();
+                      go(selected + 1);
+                    } else if (event.key === 'ArrowLeft') {
+                      event.preventDefault();
+                      go(selected - 1);
+                    } else if (event.key === 'Home') {
+                      event.preventDefault();
+                      go(0);
+                    } else if (event.key === 'End') {
+                      event.preventDefault();
+                      go(outlook.length - 1);
+                    }
+                  }}
                   title={`${dayLabel(plan.day.date)} — ${plan.day.condition ?? 'Forecast'}`}
                   className={`forecast-day-tile flex w-full h-[4.75rem] flex-col items-center justify-between py-2 text-[#f1e7da] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:h-[6.5rem] sm:py-3.5 md:h-[7.25rem] md:py-4 ${
                     isActive ? 'is-active' : ''
