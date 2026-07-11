@@ -19,7 +19,7 @@ import { BadgeClearer } from './components/pwa/BadgeClearer';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WeatherProvider, useWeather } from './context/WeatherContext';
-import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions } from './context/WardrobeContext';
+import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions, type WardrobeAddResult } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
 import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
 import { ErrorBoundary, RouteErrorFallback } from './components/ErrorBoundary';
@@ -696,6 +696,10 @@ function DashboardView() {
     wardrobeFixHint,
     vaultSearchUiActive,
     isImageSyncing,
+    isDetailRefreshing,
+    handleWardrobeImageLoad,
+    handleWardrobeImageError,
+    ensureWardrobeImage,
     isAdmin,
     setIsShareModalOpen,
     setActiveRecommendation,
@@ -818,7 +822,7 @@ function DashboardView() {
           name: item.name,
           brand: item.brand,
           imageUrl: item.imageUrl ?? '',
-          season: 'Universal',
+          season: '',
         };
         if (item.family) built.family = item.family;
         if (item.notes?.length) built.notes = item.notes;
@@ -834,13 +838,12 @@ function DashboardView() {
         if (item.description) built.description = item.description;
 
         onProgress({ index, total, name: item.name, status: 'adding' });
-        const result = await handleAddItem(built).catch(() => ({ persisted: false }));
+        const result = await handleAddItem(built).catch(
+          (): WardrobeAddResult => ({ persisted: false }),
+        );
         // A guest add is stored locally (guestSaved) and a duplicate is already
         // in the vault — both are successful outcomes for curation, not failures.
-        const succeeded =
-          result.persisted ||
-          (result as { guestSaved?: boolean }).guestSaved ||
-          (result as { duplicate?: boolean }).duplicate;
+        const succeeded = result.persisted || result.guestSaved || result.duplicate;
         if (!succeeded) {
           failedItems.push(item);
           onProgress({ index, total, name: item.name, status: 'failed' });
@@ -848,26 +851,26 @@ function DashboardView() {
         }
         // A duplicate already lives in the vault with its image — skip the
         // image-curation hold below and report it ready immediately.
-        if ((result as { duplicate?: boolean }).duplicate) {
-          onProgress({ index, total, name: item.name, status: 'ready' });
-          continue;
-        }
-        added++;
+        const canonicalItem = result.item ?? (built as unknown as Fragrance);
         const hasImage =
-          typeof built.imageUrl === 'string' && (built.imageUrl as string).trim().length > 0;
+          typeof canonicalItem.imageUrl === 'string' && canonicalItem.imageUrl.trim().length > 0;
         if (!hasImage) {
           // No catalog image rode along — actively trigger the image pipeline and
           // wait for it (this is the "curating" hold the user sees).
           onProgress({ index, total, name: item.name, status: 'curating' });
-          await handlePersistWardrobeImage(built as unknown as Fragrance, undefined, undefined, {
-            suppressToast: true,
-          }).catch(() => null);
+          const ensured = await ensureWardrobeImage(canonicalItem).catch(() => null);
+          if (!ensured?.imageUrl?.trim()) {
+            failedItems.push(item);
+            onProgress({ index, total, name: item.name, status: 'failed' });
+            continue;
+          }
         }
+        added++;
         onProgress({ index, total, name: item.name, status: 'ready' });
       }
       return { added, total, failedItems };
     },
-    [handleAddItem, handlePersistWardrobeImage],
+    [ensureWardrobeImage, handleAddItem],
   );
 
   useModalBehavior({
@@ -1414,6 +1417,9 @@ function DashboardView() {
                 wardrobeError={wardrobeError}
                 onRetryLoadWardrobe={retryLoadWardrobe}
                 isImageSyncing={isImageSyncing}
+                isDetailRefreshing={isDetailRefreshing}
+                onImageLoad={handleWardrobeImageLoad}
+                onImageError={handleWardrobeImageError}
               />
             </React.Suspense>
           </div>

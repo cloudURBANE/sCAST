@@ -42,6 +42,10 @@ interface VaultGridTileProps {
   bottleMorphTransition: Transition;
   /** Optional per-item syncing predicate (stable ref from the parent). */
   isImageSyncing?: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
+  /** Report a terminal bottle load against the exact row + source that rendered. */
+  onImageLoad?: (item: Fragrance, imageUrl: string) => void;
+  /** Report a terminal bottle failure against the exact row + source that rendered. */
+  onImageError?: (item: Fragrance, imageUrl: string) => void;
   /** Stable handler — opens the detail modal for this item. */
   onOpen: (item: Fragrance) => void;
   /** Stable handler — prefetches reviews on hover for this item. */
@@ -55,12 +59,21 @@ function VaultGridTileComponent({
   motionDisabled,
   bottleMorphTransition,
   isImageSyncing,
+  onImageLoad,
+  onImageError,
   onOpen,
   onPrefetch,
 }: VaultGridTileProps) {
   const name = entryName(item);
+  const imageUrl = item.imageUrl?.trim() ?? '';
   const handleClick = React.useCallback(() => onOpen(item), [onOpen, item]);
   const handleMouseEnter = React.useCallback(() => onPrefetch(item), [onPrefetch, item]);
+  const handleImageLoad = React.useCallback(() => {
+    if (imageUrl) onImageLoad?.(item, imageUrl);
+  }, [imageUrl, item, onImageLoad]);
+  const handleImageError = React.useCallback(() => {
+    if (imageUrl) onImageError?.(item, imageUrl);
+  }, [imageUrl, item, onImageError]);
   const handleKeyDown = React.useCallback((event: React.KeyboardEvent) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
@@ -116,6 +129,8 @@ function VaultGridTileComponent({
             imgClassName={imgClassName}
             loading={prioritizeImage ? 'eager' : 'lazy'}
             fetchPriority={prioritizeImage ? 'high' : undefined}
+            onLoad={onImageLoad ? handleImageLoad : undefined}
+            onError={onImageError ? handleImageError : undefined}
           />
         </m.div>
       </VaultCard>

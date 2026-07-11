@@ -29,6 +29,10 @@ import {
   hasDetailRefreshPayload,
 } from "../services/wardrobeDetailFacts";
 import { wardrobeVersionEtag } from "../services/wardrobeVersion";
+import {
+  ensureOwnedWardrobeImage,
+  parseWardrobeFailedImageUrl,
+} from "../services/wardrobeImageEnsure";
 
 const router = Router();
 
@@ -339,6 +343,47 @@ async function findUserRow(tenantId: string, userId: string, idParam: string) {
     .limit(1);
   return rows[0] ?? null;
 }
+
+/**
+ * Prove or repair the bottle image for one row owned by the authenticated user.
+ * A failedUrl is compare-only: stale reports cannot overwrite a newer manual
+ * selection. Expensive recovery is detached and this request returns 202 while
+ * it runs; a byte-backed current/shared reference returns the full ready item.
+ */
+router.post(
+  "/wardrobe/:id/image/ensure",
+  requireAuth,
+  wardrobeWriteRateLimit,
+  async (req: AuthRequest, res) => {
+    const user = req.user!;
+    const tenantId = getTenantId(req);
+    const id = String(req.params.id ?? "").trim();
+    if (!id) {
+      res.status(400).json({ error: "id is required" });
+      return;
+    }
+
+    const parsedFailedUrl = parseWardrobeFailedImageUrl(req.body?.failedUrl);
+    if (!parsedFailedUrl.ok) {
+      res.status(400).json({ error: "failedUrl must be a string of at most 4096 characters" });
+      return;
+    }
+
+    const match = await findUserRow(tenantId, user.id, id);
+    if (!match) {
+      res.status(404).json({ error: "Fragrance not found" });
+      return;
+    }
+
+    const result = await ensureOwnedWardrobeImage({
+      tenantId,
+      userId: user.id,
+      row: match,
+      failedUrl: parsedFailedUrl.value,
+    });
+    res.status(result.status === "pending" ? 202 : 200).json(result);
+  },
+);
 
 router.patch("/wardrobe/:fragranceId/visibility", requireAuth, wardrobeWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;

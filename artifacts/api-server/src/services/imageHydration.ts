@@ -15,6 +15,8 @@ export type SharedImageReference = {
   sourceProvider?: string | null;
   sourceUrl?: string | null;
   storagePath?: string | null;
+  imageHash?: string | null;
+  storageProvider?: string | null;
   /** Orientation Engine geometry when the cache image is a normalized square. */
   imageProperties?: unknown;
 };
@@ -27,6 +29,8 @@ async function catalogProfileImageReference(profile: Record<string, unknown> | n
     sourceProvider: typeof profile?.sourceProvider === "string" ? profile.sourceProvider : null,
     sourceUrl: typeof profile?.sourceUrl === "string" ? profile.sourceUrl : null,
     storagePath: typeof profile?.storagePath === "string" ? profile.storagePath : null,
+    imageHash: typeof profile?.imageHash === "string" ? profile.imageHash : null,
+    storageProvider: typeof profile?.storageProvider === "string" ? profile.storageProvider : null,
   };
   // A catalog profile that persisted the crawled Fragrantica fallback offers no
   // shared image — the fallback is owner-rejected for display everywhere.
@@ -54,6 +58,8 @@ export async function resolveSharedImageReference(
         sourceProvider: cached.sourceProvider,
         sourceUrl: cached.sourceUrl ?? null,
         storagePath: cached.storagePath,
+        imageHash: cached.imageHash,
+        storageProvider: cached.storageProvider,
         imageProperties: cached.imageProperties ?? null,
       };
     }

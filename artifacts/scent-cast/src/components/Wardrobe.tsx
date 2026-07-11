@@ -47,6 +47,7 @@ import {
 import { BottleImage } from '@/components/BottleImage';
 import { VaultCard } from '@/components/VaultCard';
 import { VaultGridTile } from '@/components/VaultGridTile';
+import { usefulFragranceFact } from '@/lib/fragranceFacts';
 import { vaultIdentityKey } from '@/lib/vaultIdentity';
 import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
@@ -1137,6 +1138,12 @@ export const Wardrobe: React.FC<{
   onRetryLoadWardrobe?: () => void;
   /** True while a freshly-added imageless tile is actively backfilling its image. */
   isImageSyncing?: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
+  /** True only while this detail row has a live enrichment request in flight. */
+  isDetailRefreshing?: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
+  /** Observe a terminal bottle load for recovery bookkeeping. */
+  onImageLoad?: (item: Fragrance, imageUrl: string) => void;
+  /** Observe a terminal bottle failure for recovery bookkeeping. */
+  onImageError?: (item: Fragrance, imageUrl: string) => void;
 }> = ({
   items,
   onDelete,
@@ -1159,6 +1166,9 @@ export const Wardrobe: React.FC<{
   wardrobeError = null,
   onRetryLoadWardrobe,
   isImageSyncing,
+  isDetailRefreshing,
+  onImageLoad,
+  onImageError,
 }) => {
   const [selectedItem, setSelectedItem] = React.useState<Fragrance | null>(null);
   const [detailBottleLayoutId, setDetailBottleLayoutId] = React.useState<string | null>(null);
@@ -1178,6 +1188,7 @@ export const Wardrobe: React.FC<{
   const [detailReviews, setDetailReviews] = React.useState<FragranceRawReview[]>([]);
   const { gridMode, setGridMode, isCompactGrid } = useVaultGridPreference();
   const { lowMotionRenderMode, isIpad, ipadSafariPerformanceMode } = useRenderBudget();
+  const prefersReducedMotion = useReducedMotion();
   // iPad stays in the tablet/desktop experience. Only phone-class constrained
   // surfaces collapse the panel; an iPad reduced-motion session keeps the
   // wider layout while honoring reduced motion.
@@ -1209,11 +1220,20 @@ export const Wardrobe: React.FC<{
   React.useEffect(() => {
     setSelectedItem((current) => {
       if (!current) return current;
-      const match = items.find((candidate) =>
-        current._dbId
-          ? candidate._dbId === current._dbId
-          : !candidate._dbId && candidate.id === current.id,
+      const directMatch = items.find(
+        (candidate) =>
+          candidate.id === current.id ||
+          Boolean(current._dbId && candidate._dbId === current._dbId),
       );
+      const currentIdentity = vaultIdentityKey(entryBrand(current), entryName(current));
+      const match =
+        directMatch ??
+        (currentIdentity
+          ? items.find(
+              (candidate) =>
+                vaultIdentityKey(entryBrand(candidate), entryName(candidate)) === currentIdentity,
+            )
+          : undefined);
       return match && match !== current ? match : current;
     });
   }, [items]);
@@ -1874,6 +1894,29 @@ export const Wardrobe: React.FC<{
     previewFailedToDisplay && savedBottleUrl !== '' && savedBottleUrl !== detailBottleUrl;
   const detailDisplayUrl = showSavedBottleInsteadOfPreview ? savedBottleUrl : detailBottleUrl;
 
+  const handleDetailImageLoad = React.useCallback(() => {
+    const imageUrl = detailDisplayUrl.trim();
+    if (selectedItem && imageUrl) onImageLoad?.(selectedItem, imageUrl);
+  }, [detailDisplayUrl, onImageLoad, selectedItem]);
+  const handleDetailImageError = React.useCallback(() => {
+    const imageUrl = detailDisplayUrl.trim();
+    if (!imageUrl) return;
+    markDetailImageBroken(imageUrl);
+    if (selectedItem) onImageError?.(selectedItem, imageUrl);
+  }, [detailDisplayUrl, markDetailImageBroken, onImageError, selectedItem]);
+
+  const featuredImageUrl = featuredItem?.imageUrl?.trim() ?? '';
+  const handleFeaturedImageLoad = React.useCallback(() => {
+    if (featuredItem && featuredImageUrl) {
+      onImageLoad?.(featuredItem, featuredImageUrl);
+    }
+  }, [featuredImageUrl, featuredItem, onImageLoad]);
+  const handleFeaturedImageError = React.useCallback(() => {
+    if (featuredItem && featuredImageUrl) {
+      onImageError?.(featuredItem, featuredImageUrl);
+    }
+  }, [featuredImageUrl, featuredItem, onImageError]);
+
   const frameDirty =
     !!selectedItem && !bottleImageAdjustmentsEqual(frameDraft, selectedItem.imageAdjustment);
 
@@ -1891,7 +1934,18 @@ export const Wardrobe: React.FC<{
     );
   const selectedEnrichment =
     selectedItem?.enrichment ?? selectedItem?.raw_engine_detail?.enrichment ?? null;
-  const detailFactsResolving = isBackgroundEnrichmentQueued(selectedEnrichment);
+  // Persisted enrichment state can outlive the request that produced it. Only
+  // the live request predicate may drive loading motion or lock manual edits.
+  const detailFactsRefreshing = Boolean(
+    selectedItem && isDetailRefreshing?.(selectedItem),
+  );
+  const detailFactsQueued =
+    !detailFactsRefreshing && isBackgroundEnrichmentQueued(selectedEnrichment);
+  React.useEffect(() => {
+    if (!detailFactsRefreshing) return;
+    setEditingFactField(null);
+    setFactDraft('');
+  }, [detailFactsRefreshing]);
   const detailShowDeferredContent = !constrainedDetailMode || detailDeferredContentReady;
   const detailPanelClassName = constrainedDetailMode
     // Constrained surfaces (iPhone/Android) render the panel full-screen and
@@ -1938,28 +1992,38 @@ export const Wardrobe: React.FC<{
   const detailVisualPanelClassName = stackedDetailMode
     ? "min-h-[16rem]"
     : "lg:h-full lg:min-h-[21.25rem]";
-  // Drop placeholder values like "Unknown"/"N/A" rather than surfacing them —
-  // an empty-but-honest detail reads more premium than a confident "Unknown",
-  // and detailMetaRows already hides rows whose value is falsy.
-  const cleanMetaValue = (value: string | null | undefined): string | undefined => {
-    if (!value) return undefined;
-    const trimmed = value.trim();
-    return /^(unknown|n\/?a|none|null|undefined)$/i.test(trimmed) ? undefined : trimmed;
-  };
+  // Normalize placeholder facts before both display and progress accounting.
+  // "Universal" is useful in some fragrance contexts but is not a concrete
+  // environment, so it remains an honestly missing/editable Environment here.
   // All four metrics always render. A known value shows as-is (read-only); an
-  // unscraped one shows an explicit "Unknown" (cleanMetaValue strips the literal
-  // placeholder, so `value` is undefined exactly when the metric is genuinely
+  // unscraped one shows an explicit "Unknown" (usefulFragranceFact strips the
+  // literal placeholder, so `value` is undefined when the metric is genuinely
   // missing). Only the "Unknown" rows are tappable for the vault owner to fill
   // the fact by hand — already-filled metrics are not editable, so a verified
   // value can't be accidentally clobbered.
   const detailMetaRows: Array<{ field: MetricFactField; label: string; value?: string }> = selectedItem
     ? [
-        { field: 'year', label: 'Year', value: cleanMetaValue(formatYear(selectedItem.year)) },
-        { field: 'gender', label: 'Gender', value: cleanMetaValue(stringValue(selectedItem.gender)) },
-        { field: 'concentration', label: 'Concentration', value: cleanMetaValue(stringValue(selectedItem.concentration)) },
-        { field: 'season', label: 'Environment', value: cleanMetaValue(stringValue(selectedItem.season)) },
+        { field: 'year', label: 'Year', value: usefulFragranceFact(formatYear(selectedItem.year)) },
+        { field: 'gender', label: 'Gender', value: usefulFragranceFact(stringValue(selectedItem.gender)) },
+        { field: 'concentration', label: 'Concentration', value: usefulFragranceFact(stringValue(selectedItem.concentration)) },
+        {
+          field: 'season',
+          label: 'Environment',
+          value: usefulFragranceFact(stringValue(selectedItem.season), { rejectUniversal: true }),
+        },
       ]
     : [];
+  const detailResolvedFactCount = detailMetaRows.reduce(
+    (count, row) => count + (row.value ? 1 : 0),
+    0,
+  );
+  const detailProfileStatusCopy = detailFactsQueued
+    ? `Profile refresh queued · ${detailResolvedFactCount}/4 facts available`
+    : detailResolvedFactCount === 4
+      ? 'Profile ready · 4/4 facts available'
+      : detailResolvedFactCount > 0
+        ? `Profile available · ${detailResolvedFactCount}/4 facts available`
+        : 'Profile facts not yet available';
   // Inline verify is only meaningful for a real, owned vault row (it PATCHes that
   // row). A not-yet-owned preview (Beam "View" / curation deep-link) shows the
   // same metrics read-only until the user adds it to the vault.
@@ -2284,6 +2348,8 @@ export const Wardrobe: React.FC<{
                         imgClassName="scent-hover-scale transition-transform duration-500 brightness-[1.15] motion-reduce:transition-none"
                         loading="eager"
                         fetchPriority="high"
+                        onLoad={onImageLoad ? handleFeaturedImageLoad : undefined}
+                        onError={onImageError ? handleFeaturedImageError : undefined}
                       />
                     </div>
                     <div className="text-center mt-4 mb-2 space-y-3 shrink-0 px-2">
@@ -2378,6 +2444,8 @@ export const Wardrobe: React.FC<{
                         motionDisabled={lowMotionRenderMode || ipadSafariPerformanceMode}
                         bottleMorphTransition={bottleMorphTransition}
                         isImageSyncing={isImageSyncing}
+                        onImageLoad={onImageLoad}
+                        onImageError={onImageError}
                         onOpen={openDetail}
                         onPrefetch={prefetchReviews}
                       />
@@ -2592,7 +2660,8 @@ export const Wardrobe: React.FC<{
                                 isSyncing={isImageSyncing?.(selectedItem)}
                                 className="absolute inset-0"
                                 imgClassName={reducedDetailMotion ? "" : "transition-[opacity,filter] duration-300"}
-                                onError={() => markDetailImageBroken(detailDisplayUrl)}
+                                onLoad={onImageLoad ? handleDetailImageLoad : undefined}
+                                onError={handleDetailImageError}
                               />
                             </m.div>
                           </div>
@@ -2614,45 +2683,54 @@ export const Wardrobe: React.FC<{
                           {!bottleImageToolsOpen && detailMetaRows.length > 0 ? (
                             <div className="border-t border-white/[0.06] pt-3">
                               <AnimatePresence initial={false} mode="wait">
-                                {detailFactsResolving ? (
+                                {detailFactsRefreshing ? (
                                   <m.div
                                     key="profile-resolving"
-                                    initial={{ opacity: 0, y: 4 }}
+                                    initial={prefersReducedMotion ? false : { opacity: 0, y: 3 }}
                                     animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -4 }}
-                                    transition={{ duration: reducedDetailMotion ? 0.12 : 0.3, ease: SCENT_EASE_OUT }}
-                                    className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-scent-accent/15 bg-scent-accent/[0.035] px-3 py-2"
+                                    exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: -2 }}
+                                    transition={{ duration: prefersReducedMotion ? 0 : 0.22, ease: SCENT_EASE_OUT }}
+                                    className="mb-3 rounded-lg border border-scent-accent/15 bg-scent-accent/[0.035] px-3 py-2"
                                     role="status"
                                     aria-live="polite"
                                   >
-                                    <span className="relative flex size-4 items-center justify-center" aria-hidden>
-                                      <span className={`absolute size-4 rounded-full border border-scent-accent/25 ${reducedDetailMotion ? '' : 'animate-ping'}`} />
-                                      <span className="size-1.5 rounded-full bg-scent-accent shadow-[0_0_8px_rgba(212,175,55,0.72)]" />
-                                    </span>
-                                    <span className="scent-type-chip text-scent-accent/75">Building scent profile</span>
-                                    <span className="text-[10px] text-scent-text-subtle">
-                                      {detailMetaRows.filter((row) => Boolean(row.value)).length}/4 facts resolved
+                                    <div className="flex items-center justify-between gap-3">
+                                      <span className="scent-type-chip text-scent-accent/80">Building scent profile</span>
+                                      <span className="text-[10px] text-scent-text-subtle">
+                                        {detailResolvedFactCount}/4 facts available
+                                      </span>
+                                    </div>
+                                    <span
+                                      className="mt-2 block h-px overflow-hidden rounded-full bg-scent-accent/15"
+                                      aria-hidden
+                                    >
+                                      <m.span
+                                        className="block h-full w-1/3 bg-gradient-to-r from-transparent via-scent-accent to-transparent shadow-[0_0_8px_rgba(212,175,55,0.45)]"
+                                        initial={prefersReducedMotion ? false : { x: '-110%' }}
+                                        animate={prefersReducedMotion ? { x: '0%' } : { x: ['-110%', '310%'] }}
+                                        transition={
+                                          prefersReducedMotion
+                                            ? { duration: 0 }
+                                            : { duration: 1.35, repeat: Infinity, ease: 'linear' }
+                                        }
+                                      />
                                     </span>
                                   </m.div>
                                 ) : (
-                                  <m.p
-                                    key="profile-ready"
-                                    initial={{ opacity: 0, y: 3 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0 }}
-                                    transition={{ duration: reducedDetailMotion ? 0.12 : 0.32 }}
+                                  <p
+                                    key={detailFactsQueued ? 'profile-queued' : 'profile-available'}
                                     className="mb-2 text-center text-[10px] uppercase tracking-[0.18em] text-scent-text-subtle"
                                     role="status"
                                   >
-                                    Profile scan complete · {detailMetaRows.filter((row) => Boolean(row.value)).length}/4 facts available
-                                  </m.p>
+                                    {detailProfileStatusCopy}
+                                  </p>
                                 )}
                               </AnimatePresence>
                               <div className="grid grid-cols-2 gap-px">
-                                {detailMetaRows.map(({ field, label, value }) => {
+                                {detailMetaRows.map(({ field, label, value }, factIndex) => {
                                   const isUnknown = !value;
-                                  const isResolving = isUnknown && detailFactsResolving;
-                                  const display = value ?? (isResolving ? 'Resolving' : 'Unknown');
+                                  const isResolving = isUnknown && detailFactsRefreshing;
+                                  const display = value ?? 'Unknown';
                                   const isEditing = editingFactField === field;
                                   // Only genuinely-missing metrics are editable. A
                                   // filled value renders as plain, non-interactive text.
@@ -2713,15 +2791,27 @@ export const Wardrobe: React.FC<{
                                     );
                                   }
                                   return (
-                                    <m.div
+                                    <div
                                       key={field}
-                                      layout
-                                      className="flex min-h-[3.75rem] flex-col items-center gap-1 py-2 text-center"
-                                      animate={{ opacity: isResolving ? 0.72 : 1 }}
-                                      transition={{ duration: reducedDetailMotion ? 0.1 : 0.28 }}
+                                      className={`flex min-h-[3.75rem] flex-col items-center gap-1 py-2 text-center ${isResolving ? 'opacity-75' : ''}`}
                                     >
                                       <p className="scent-type-label">{label}</p>
-                                      {editable ? (
+                                      {isResolving ? (
+                                        <div className="flex h-5 items-center justify-center">
+                                          <span className="sr-only">Resolving</span>
+                                          <m.span
+                                            aria-hidden
+                                            className="h-1.5 w-16 origin-left rounded-full bg-gradient-to-r from-scent-accent/15 via-scent-accent/45 to-scent-accent/15"
+                                            initial={prefersReducedMotion ? false : { opacity: 0.25, scaleX: 0.72 }}
+                                            animate={{ opacity: 0.75, scaleX: 1 }}
+                                            transition={{
+                                              duration: prefersReducedMotion ? 0 : 0.24,
+                                              delay: prefersReducedMotion ? 0 : factIndex * 0.04,
+                                              ease: SCENT_EASE_OUT,
+                                            }}
+                                          />
+                                        </div>
+                                      ) : editable ? (
                                         <button
                                           type="button"
                                           onClick={() => beginFactEdit(field)}
@@ -2741,29 +2831,25 @@ export const Wardrobe: React.FC<{
                                         <AnimatePresence mode="wait" initial={false}>
                                           <m.p
                                             key={display}
-                                            initial={{ opacity: 0, y: 3 }}
+                                            initial={
+                                              prefersReducedMotion || !detailFactsRefreshing
+                                                ? false
+                                                : { opacity: 0, y: 3 }
+                                            }
                                             animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -3 }}
-                                            transition={{ duration: reducedDetailMotion ? 0.1 : 0.26 }}
-                                            className={`text-sm font-medium leading-snug ${isResolving ? 'italic text-scent-accent/60' : isUnknown ? 'italic text-scent-text-subtle' : 'text-scent-text-muted'}`}
+                                            exit={
+                                              prefersReducedMotion || !detailFactsRefreshing
+                                                ? { opacity: 0 }
+                                                : { opacity: 0, y: -3 }
+                                            }
+                                            transition={{ duration: prefersReducedMotion ? 0 : 0.24 }}
+                                            className={`text-sm font-medium leading-snug ${isUnknown ? 'italic text-scent-text-subtle' : 'text-scent-text-muted'}`}
                                           >
                                             {display}
-                                            {isResolving ? (
-                                              <span className="ml-1 inline-flex gap-0.5" aria-hidden>
-                                                {[0, 1, 2].map((dot) => (
-                                                  <m.span
-                                                    key={dot}
-                                                    className="inline-block size-0.5 rounded-full bg-scent-accent/70"
-                                                    animate={reducedDetailMotion ? undefined : { opacity: [0.25, 1, 0.25], y: [0, -1.5, 0] }}
-                                                    transition={{ duration: 1.1, repeat: Infinity, delay: dot * 0.14 }}
-                                                  />
-                                                ))}
-                                              </span>
-                                            ) : null}
                                           </m.p>
                                         </AnimatePresence>
                                       )}
-                                    </m.div>
+                                    </div>
                                   );
                                 })}
                               </div>
@@ -3520,7 +3606,8 @@ export const Wardrobe: React.FC<{
                       className="absolute inset-0"
                       imgClassName="brightness-[1.08] scale-[1.02]"
                       loading="eager"
-                      onError={() => markDetailImageBroken(detailDisplayUrl)}
+                      onLoad={onImageLoad ? handleDetailImageLoad : undefined}
+                      onError={handleDetailImageError}
                     />
                   </div>
                   <p className="mt-5 scent-type-label font-sans">
