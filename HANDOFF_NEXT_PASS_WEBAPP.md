@@ -37,6 +37,40 @@ audits) and `docs/beam-agent/09-production-readiness-plan.md` (Beam Agent prod-r
 
 ## 1. Master index — what is left
 
+> **Status reconciliation — 2026-07-12 (verified against the current tree).** Every
+> card below except W-6 and W-11 is now **done on `main`**. Evidence per card:
+>
+> - **W-1 ✅** `pwa/InstallPrompt.tsx` pins to `--mobile-nav-offset` (line ~138).
+> - **W-2 ✅** `SEARCH_QUERY_BRAND_ALIASES` carries `tf`, `jpg`, `pdm`, `eldo`, `adp`
+>   (+ `atg`) in `lib/fragranceApi.ts`.
+> - **W-3 ✅** result card commits one-tap via the same `handlePrimaryAction` →
+>   `handleConfirm()` path (`FragranceCapture.tsx`, comment at the card button).
+> - **W-4 ✅** `imageProxyCache.ts` emits `s-maxage` mirroring `max-age` on both tiers.
+> - **W-5 ✅** per-user daily caps: 60 runs/day AND `BEAM_USER_DAILY_SPEND_USD` ($2)
+>   enforced off the usage ledger (`beamAgentRoutes.ts`).
+> - **W-6 ➖ superseded as written** — the Vercel edge proxy no longer exists
+>   (`middleware.js`/`vercel.json` deleted; CloudFront serves `/api/*` — see
+>   `docs/LAUNCH_READINESS_2026-07-10.md` S3). The equivalent concern — SSE
+>   buffering through **CloudFront** — remains a post-deploy verify item.
+> - **W-7 ✅** run/session state externalized via `beamRunStore.ts` (Redis-backed when
+>   `isRedisConfigured()`, in-memory single-replica fallback).
+> - **W-8 ✅** answer-consistency gates landed in PR #611 (`answerQualityGates.ts`,
+>   mission-state constraints).
+> - **W-9 ✅** `CommentThread.tsx` builds a nested tree from `parentCommentId`
+>   (`buildCommentTree`) with per-node reply.
+> - **W-10 ✅** `pwa/PushPrompt.tsx` consent banner calls `subscribeToPush(authToken)`.
+> - **W-11 ⏸ still deferred by design** — `conversations`/`messages` remain
+>   off-runtime-schema and tenant-unscoped; the card only applies **if** persistence
+>   is built. Nothing to do until then.
+> - **W-12 ✅** producer (`routes/fragrances.ts` → `enqueueEnrichmentJob`) and worker
+>   (`index.ts` → `startEnrichmentWorker`) are wired, each behind an env flag
+>   defaulting OFF (`ENRICHMENT_QUEUE_ENABLED` / `ENRICHMENT_WORKER_ENABLED`).
+> - **W-13 ✅** search-query-level in-flight dedup (`inFlightBySearchQuery`,
+>   `imagePipeline.ts`).
+> - **W-14 ✅** the stale "built, not mounted" claims are gone from the beam-agent docs.
+>
+> The table below is kept for historical context — do not re-open completed cards.
+
 | ID | Title | Type | Priority | Subagent | Primary file(s) |
 |---|---|---|---|---|---|
 | W-1 | PWA install banner doesn't follow hidden nav | 🟢 FIX (1-line) | High | optional | `components/pwa/InstallPrompt.tsx` |
