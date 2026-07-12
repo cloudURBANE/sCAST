@@ -25,6 +25,7 @@ import {
   hasTieredPyramidNotes,
   normalizePyramidNotes as normalizePyramidInput,
 } from '@/lib/fragranceNotes';
+import { resolveFragranceFacts } from '@/lib/fragranceFacts';
 import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
 
 /**
@@ -741,12 +742,15 @@ export const FragranceCapture: React.FC<{
       setLoadingSurface('sync');
       setLoadingStatus("Syncing to Vault...");
       setSyncComplete(false);
-      const familyStr = typeof selected.family === 'string' ? selected.family : '';
+      const resolvedFacts = resolveFragranceFacts({ selected });
       try {
         const saveResult = await onAdd({
           ...selected,
+          year: resolvedFacts.year,
+          gender: resolvedFacts.gender,
+          concentration: resolvedFacts.concentration,
+          season: resolvedFacts.season,
           id: newFragranceId(),
-          season: familyStr.includes('Fresh') ? 'Summer' : familyStr.includes('Woody') ? 'Winter' : 'Universal',
         });
         setLoadingStatus(
           saveResult?.persisted
@@ -857,6 +861,8 @@ export const FragranceCapture: React.FC<{
           name: selected.name,
           brand: firstString(selected.brand, selected.house),
           house: firstString(selected.house, selected.brand),
+          year: selected.year,
+          gender: selected.gender,
           source_url: selectedSourceUrl,
         } as FragranceDetail);
       }
@@ -995,6 +1001,11 @@ export const FragranceCapture: React.FC<{
               base: pipelinePyramid.base,
             }
           : buildPyramidFromFlatNotes(displayNotes);
+      const resolvedFacts = resolveFragranceFacts({
+        detail,
+        selected,
+        pipelineProfile,
+      });
 
       const saveResult = await onAdd({
         ...detail,
@@ -1010,7 +1021,6 @@ export const FragranceCapture: React.FC<{
         scent_vector: pipelineProfile.scent_vector,
         performance: pipelineProfile.performance,
         context: pipelineProfile.context,
-        concentration: pipelineProfile.concentration,
         accords: pipelineProfile.accords,
         family: (pipelineProfile.family as string | undefined) ?? detailFamily,
         imageUrl: pipelineImageUrl || "",
@@ -1018,7 +1028,10 @@ export const FragranceCapture: React.FC<{
         imageHash: pipelineProfile.imageHash as string | null | undefined,
         storageProvider: pipelineProfile.storageProvider as string | undefined,
         id: newFragranceId(),
-        season: 'Universal',
+        year: resolvedFacts.year,
+        gender: resolvedFacts.gender,
+        concentration: resolvedFacts.concentration,
+        season: resolvedFacts.season,
         source_url: firstString(detail.source_url, selected.source_url),
         pyramid: hasTieredPyramidNotes(resolvedPyramid) ? resolvedPyramid : undefined,
         notes: displayNotes.length > 0 ? displayNotes : undefined,

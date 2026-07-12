@@ -7,6 +7,14 @@ import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { reconcileWardrobeItems } from '@/lib/wardrobeReconcile';
 import { displayableVaultImageUrl } from '@/lib/vaultImagePolicy';
 import { vaultIdentityKey } from '@/lib/vaultIdentity';
+import { resolveFragranceFacts, usefulFragranceFact } from '@/lib/fragranceFacts';
+import {
+  addWardrobeImageTarget,
+  hasWardrobeImageReference,
+  includesWardrobeImageTarget,
+  removeWardrobeImageTarget,
+  wardrobeImageTargetKey,
+} from '@/lib/wardrobeImageRecovery';
 import {
   calculateScentWeatherRecommendation,
   traitsMatchScentFamily,
@@ -50,6 +58,22 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined)
 
 function appApiUrl(path: string): string {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
+
+function imageUrlWithoutRetryVersion(value: string): string {
+  try {
+    const parsed = new URL(value, 'http://local.invalid');
+    parsed.searchParams.delete('v');
+    const relative = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    return /^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? parsed.toString() : relative;
+  } catch {
+    return value;
+  }
+}
+
+function withImageRetryVersion(value: string): string {
+  const base = imageUrlWithoutRetryVersion(value);
+  return `${base}${base.includes('?') ? '&' : '?'}v=${Date.now()}`;
 }
 
 function onboardingMarkerKey(authToken: string): string {
@@ -140,53 +164,8 @@ const firstString = (...values: unknown[]): string | undefined => {
   return undefined;
 };
 
-const UNKNOWN_FACT_VALUES = new Set(['unknown', 'n/a', 'na', 'none', 'null']);
-
-const titleFactValue = (value: string): string =>
-  value
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .map((word) => (word.length <= 3 && word === word.toUpperCase()
-      ? word
-      : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()))
-    .join(' ');
-
-const usefulFactString = (value: unknown, options?: { rejectUniversal?: boolean }): string | undefined => {
-  const raw = firstString(value);
-  if (!raw) return undefined;
-  const normalized = raw.trim().toLowerCase();
-  if (UNKNOWN_FACT_VALUES.has(normalized)) return undefined;
-  if (options?.rejectUniversal && normalized === 'universal') return undefined;
-  return raw.trim();
-};
-
 const detailRefreshFactPatch = (detail: FragranceDetail): Partial<Pick<Fragrance, 'year' | 'gender' | 'concentration' | 'season'>> => {
-  const patch: Partial<Pick<Fragrance, 'year' | 'gender' | 'concentration' | 'season'>> = {};
-
-  if (typeof detail.year === 'number' && Number.isFinite(detail.year)) {
-    patch.year = Math.trunc(detail.year);
-  }
-
-  const gender = usefulFactString(detail.gender);
-  if (gender) patch.gender = gender;
-
-  const concentration = usefulFactString(detail.concentration);
-  if (concentration) patch.concentration = concentration;
-
-  const explicitSeason = usefulFactString(detail.season, { rejectUniversal: true });
-  const derivedSeasons = detail.derived_metrics?.wear_profile?.primary_seasons
-    ?.map((season) => usefulFactString(season, { rejectUniversal: true }))
-    .filter((season): season is string => Boolean(season));
-  const season = explicitSeason ?? (
-    derivedSeasons && derivedSeasons.length > 0
-      ? uniqueStrings(derivedSeasons).map(titleFactValue).join(' / ')
-      : undefined
-  );
-  if (season) patch.season = season;
-
-  return patch;
+  return resolveFragranceFacts({ detail });
 };
 
 const uniqueStrings = (values: string[]): string[] =>
@@ -225,7 +204,7 @@ function readGuestWardrobeItems(): Fragrance[] {
         // Guest rows never round-trip through server hydration, so the
         // crawled-Fragrantica display gate applies here on read.
         imageUrl: displayableVaultImageUrl(value.imageUrl),
-        season: firstString(value.season) ?? 'Universal',
+        season: usefulFragranceFact(value.season, { rejectUniversal: true }) ?? '',
       } as Fragrance];
     });
   } catch {
@@ -1110,6 +1089,16 @@ export function planWeeklyScentOutlook(
   });
 }
 
+export type WardrobeAddResult = {
+  persisted: boolean;
+  requiresAuth?: boolean;
+  error?: string;
+  duplicate?: boolean;
+  guestSaved?: boolean;
+  /** Canonical local/server row. Signed-in saves include the server `_dbId`. */
+  item?: Fragrance;
+};
+
 interface WardrobeContextType {
   items: Fragrance[];
   wardrobeLoaded: boolean;
@@ -1141,6 +1130,14 @@ interface WardrobeContextType {
   pendingDetailOpenSourceLayoutId: string | null;
   /** True while a freshly-added imageless tile is actively backfilling its image. */
   isImageSyncing: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
+  /** True only while this row has a real detail refresh request in flight. */
+  isDetailRefreshing: (item: Pick<Fragrance, 'id' | '_dbId'>) => boolean;
+  /** Confirm that a candidate URL decoded successfully in a rendered bottle. */
+  handleWardrobeImageLoad: (item: Fragrance, imageUrl: string) => void;
+  /** Report a terminal rendered-image failure to the authenticated repair flow. */
+  handleWardrobeImageError: (item: Fragrance, imageUrl: string) => void;
+  /** Ensure one owned wardrobe row has a verified image, returning the latest row when ready. */
+  ensureWardrobeImage: (item: Fragrance) => Promise<Fragrance | null>;
   retryLoadWardrobe: () => void;
   setItems: React.Dispatch<React.SetStateAction<Fragrance[]>>;
   setIsIntentModalOpen: (open: boolean) => void;
@@ -1157,7 +1154,7 @@ interface WardrobeContextType {
   setUserId: (id: string | null) => void;
   setVaultSearchUiActive: (active: boolean) => void;
   loadWardrobe: (token: string, signal?: AbortSignal) => Promise<void>;
-  handleAddItem: (item: any) => Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string; duplicate?: boolean; guestSaved?: boolean }>;
+  handleAddItem: (item: any) => Promise<WardrobeAddResult>;
   handlePersistWardrobeImage: (target: Fragrance, imageUrl?: string, imageAdjustment?: BottleImageAdjustment, options?: { suppressToast?: boolean }) => Promise<Fragrance | null>;
   /** Admin-only: re-host an uploaded file / URL and return a persistable image URL. */
   uploadAdminBottleImage: (input: {
@@ -1249,14 +1246,21 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // conditional interval poll so the server can answer 304 when nothing changed.
   const wardrobeEtagRef = useRef<string | null>(null);
   const appStateRefreshInFlightRef = useRef(false);
-  const imageBackfillTimersRef = useRef<number[]>([]);
-  const imageBackfillInFlightRef = useRef(false);
+  // Image work is keyed per row. A second add must never cancel the first row.
+  const imageBackfillTimersRef = useRef<Map<string, number[]>>(new Map());
+  const imageBackfillInFlightRef = useRef<Set<string>>(new Set());
+  const imageEnsureInFlightRef = useRef<Map<string, Promise<Fragrance | null>>>(new Map());
+  const imageFailureReportsRef = useRef<Set<string>>(new Set());
+  const failedImageUrlsRef = useRef<Set<string>>(new Set());
   // The single fragrance whose image is being actively backfilled (one burst runs
   // at a time — see `scheduleImageBackfillRehydrate`). Drives the honest "fetching
   // image…" affordance so a freshly-added imageless tile shows a spinner *while it
   // is genuinely syncing*, then settles to "No image" once the burst gives up —
   // rather than spinning forever (FE-1) or lying with "No image" mid-fetch.
-  const [imageSyncTarget, setImageSyncTarget] = useState<Pick<Fragrance, 'id' | '_dbId'> | null>(null);
+  const [imageSyncTargets, setImageSyncTargets] = useState<Array<Pick<Fragrance, 'id' | '_dbId'>>>([]);
+  // Real request lifecycle for the four profile facts. Persisted enrichment
+  // metadata can remain queued during backoff or after work has stopped.
+  const [detailRefreshKeys, setDetailRefreshKeys] = useState<Set<string>>(() => new Set());
   const itemsRef = useRef(items);
   const authTokenRef = useRef(authToken);
   const previousGuestPersistenceAuthRef = useRef(authToken);
@@ -1397,7 +1401,13 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // unconditional focus/visibility poll happens to fire.
       const etag = res.headers.get('ETag');
       if (etag) wardrobeEtagRef.current = etag;
-      setItems((prev) => reconcileWardrobeItems(prev, data));
+      const displayableData = data.map((item) => {
+        const imageUrl = typeof item.imageUrl === 'string' ? item.imageUrl.trim() : '';
+        return imageUrl && failedImageUrlsRef.current.has(imageUrl)
+          ? { ...item, imageUrl: '' }
+          : item;
+      });
+      setItems((prev) => reconcileWardrobeItems(prev, displayableData));
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         console.error("Failed to load wardrobe", err);
@@ -1421,14 +1431,30 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [authToken, loadWardrobe]);
 
   const clearImageBackfillTimers = useCallback(() => {
-    for (const id of imageBackfillTimersRef.current) {
-      window.clearTimeout(id);
+    for (const ids of imageBackfillTimersRef.current.values()) {
+      for (const id of ids) window.clearTimeout(id);
     }
-    imageBackfillTimersRef.current = [];
+    imageBackfillTimersRef.current.clear();
+    imageBackfillInFlightRef.current.clear();
     // Stopping the burst (image arrived, row deleted, auth changed, or unmount)
     // also drops the syncing affordance — the tile reverts to its real state.
-    setImageSyncTarget(null);
+    setImageSyncTargets([]);
   }, []);
+
+  const stopShowingImageSync = useCallback((target: Pick<Fragrance, 'id' | '_dbId'>) => {
+    setImageSyncTargets((current) => removeWardrobeImageTarget(current, target));
+  }, []);
+
+  const clearImageBackfillForTarget = useCallback((target: Pick<Fragrance, 'id' | '_dbId'>) => {
+    const key = wardrobeImageTargetKey(target);
+    if (!key) return;
+    for (const id of imageBackfillTimersRef.current.get(key) ?? []) {
+      window.clearTimeout(id);
+    }
+    imageBackfillTimersRef.current.delete(key);
+    imageBackfillInFlightRef.current.delete(key);
+    stopShowingImageSync(target);
+  }, [stopShowingImageSync]);
 
   // Guest backfill probe: guests have no server wardrobe row to re-hydrate, so
   // instead of reloading `/api/wardrobe` we read the SHARED image state for this
@@ -1462,48 +1488,52 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (applied) writeGuestWardrobeItems(next);
         return next;
       });
-      if (applied) clearImageBackfillTimers();
     } catch {
       /* non-fatal: the next scheduled poll (or the give-up timer) handles it */
     }
-  }, [clearImageBackfillTimers]);
+  }, []);
 
   // Resolve the shared catalog image and persist it into this user's row. A
   // full wardrobe reload can keep returning an imageless row when the separate
   // best-effort background write lags behind the catalog update.
   const pollSignedInSharedImage = useCallback(async (target: Fragrance, token: string) => {
-    if (imageBackfillInFlightRef.current) return;
-    imageBackfillInFlightRef.current = true;
+    const targetKey = wardrobeImageTargetKey(target);
+    if (!targetKey || imageBackfillInFlightRef.current.has(targetKey)) return;
+    imageBackfillInFlightRef.current.add(targetKey);
     try {
       const rowId = target._dbId ?? target.id;
-      const res = await fetch(`/api/wardrobe/${encodeURIComponent(rowId)}`, {
-        method: 'PATCH',
+      const res = await fetch(`/api/wardrobe/${encodeURIComponent(rowId)}/image/ensure`, {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ syncImageFromCatalog: true }),
+        body: JSON.stringify({}),
       });
-      // 409 means the deferred image pipeline is still working; the next
-      // scheduled probe will retry without surfacing an error to the user.
-      if (res.status === 409) return;
-      const data = (await res.json().catch(() => null)) as (Fragrance & { error?: string }) | null;
-      if (!res.ok || !data) return;
+      const data = (await res.json().catch(() => null)) as {
+        status?: 'ready' | 'pending';
+        item?: Fragrance;
+        error?: string;
+      } | null;
+      // 202 means row-owned recovery is still running. Only a verified ready
+      // item can complete this target; a non-empty URL alone is not success.
+      if (res.status === 202 || data?.status === 'pending') return;
+      if (!res.ok || data?.status !== 'ready' || !data.item) return;
+      const readyItem = data.item;
 
       setItems((prev) =>
         prev.map((item) =>
           sameWardrobeEntry(item, target)
-            ? reconcileWardrobeItems([item], [{ ...data, id: item.id }])[0] ?? item
+            ? reconcileWardrobeItems([item], [{ ...readyItem, id: item.id }])[0] ?? item
             : item,
         ),
       );
-      clearImageBackfillTimers();
     } catch {
       /* non-fatal: the next scheduled probe (or give-up timer) handles it */
     } finally {
-      imageBackfillInFlightRef.current = false;
+      imageBackfillInFlightRef.current.delete(targetKey);
     }
-  }, [clearImageBackfillTimers]);
+  }, []);
 
   // New fragrances save with no image: `POST /api/scent-profile` resolves images
   // deferred (returns empty now, backfills the shared catalog in the background),
@@ -1516,9 +1546,12 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // post-mutation cooldown in `loadWardrobe` and stop early once the image arrives.
   const scheduleImageBackfillRehydrate = useCallback(
     (target: Fragrance, token: string | null) => {
-      clearImageBackfillTimers();
+      const targetKey = wardrobeImageTargetKey(target);
+      if (!targetKey) return;
+      clearImageBackfillForTarget(target);
+      const timers: number[] = [];
       // Mark the tile as actively syncing for the lifetime of the VISIBLE burst.
-      setImageSyncTarget(target);
+      setImageSyncTargets((current) => addWardrobeImageTarget(current, target));
       // One probe attempt; returns false once the burst should stop (auth flipped,
       // row deleted, or image landed) so callers can skip scheduling more work.
       const runProbe = (): boolean => {
@@ -1526,17 +1559,19 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         // freshly-relevant mode owns the tile now. For a guest burst `token` is
         // null, so this fires the moment a token appears mid-burst.
         if (authTokenRef.current !== token) {
-          clearImageBackfillTimers();
+          clearImageBackfillForTarget(target);
           return false;
         }
         const current = itemsRef.current.find((item) => sameWardrobeEntry(item, target));
-        const resolved =
-          typeof current?.imageUrl === 'string' && current.imageUrl.trim().length > 0;
         // Row gone (deleted) or image already arrived → stop the remaining burst.
-        if (!current || resolved) {
-          clearImageBackfillTimers();
+        if (!current) {
+          clearImageBackfillForTarget(target);
           return false;
         }
+        // A URL is only a candidate. Keep the visible state until BottleImage
+        // reports decode success/failure; do not equate a non-empty string with
+        // loaded bytes. While a candidate is mounted there is nothing to poll.
+        if (hasWardrobeImageReference(current)) return true;
         if (token) {
           void pollSignedInSharedImage(target, token);
         } else {
@@ -1549,18 +1584,16 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // engine harvest + deferred pipeline).
       const VISIBLE_POLL_SCHEDULE_MS = [6000, 12000, 20000, 32000, 48000];
       for (const delay of VISIBLE_POLL_SCHEDULE_MS) {
-        imageBackfillTimersRef.current.push(window.setTimeout(runProbe, delay));
+        timers.push(window.setTimeout(runProbe, delay));
       }
       // Hard stop just after the final visible poll: if the image still hasn't
       // landed, drop the syncing affordance so the tile settles to "No image"
       // instead of spinning indefinitely. The spinner is always bounded here —
       // never reintroducing the perpetual-spinner bug FE-1 fixed.
       const SPINNER_GIVE_UP_MS = VISIBLE_POLL_SCHEDULE_MS[VISIBLE_POLL_SCHEDULE_MS.length - 1] + 4000;
-      imageBackfillTimersRef.current.push(
+      timers.push(
         window.setTimeout(() => {
-          setImageSyncTarget((current) =>
-            current && sameWardrobeEntry(current, target) ? null : current,
-          );
+          stopShowingImageSync(target);
         }, SPINNER_GIVE_UP_MS),
       );
       // Silent phase: a few more decaying probes AFTER the spinner is dropped, so
@@ -1571,22 +1604,58 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // preserves FE-1: probing continues silently, the spinner does not.
       const SILENT_POLL_SCHEDULE_MS = [70000, 95000, 130000, 175000];
       for (const delay of SILENT_POLL_SCHEDULE_MS) {
-        imageBackfillTimersRef.current.push(window.setTimeout(runProbe, delay));
+        timers.push(window.setTimeout(runProbe, delay));
       }
+      timers.push(window.setTimeout(() => {
+        imageBackfillTimersRef.current.delete(targetKey);
+        imageBackfillInFlightRef.current.delete(targetKey);
+      }, SILENT_POLL_SCHEDULE_MS[SILENT_POLL_SCHEDULE_MS.length - 1] + 5000));
+      imageBackfillTimersRef.current.set(targetKey, timers);
     },
-    [clearImageBackfillTimers, pollGuestSharedImage, pollSignedInSharedImage],
+    [clearImageBackfillForTarget, pollGuestSharedImage, pollSignedInSharedImage, stopShowingImageSync],
   );
 
   useEffect(() => clearImageBackfillTimers, [clearImageBackfillTimers]);
+
+  useEffect(() => {
+    // Account/guest switches own different rows. Cancel every old timer and
+    // forget per-session failures so an old response cannot affect the new mode.
+    clearImageBackfillTimers();
+    imageEnsureInFlightRef.current.clear();
+    imageFailureReportsRef.current.clear();
+    failedImageUrlsRef.current.clear();
+  }, [authToken, clearImageBackfillTimers]);
 
   // True only while a tile's image is being actively backfilled, so the UI can
   // show "fetching image…" instead of a premature "No image". Matches the burst's
   // own `sameWardrobeEntry` logic so it survives the id→_dbId hydration swap.
   const isImageSyncing = useCallback(
     (item: Pick<Fragrance, 'id' | '_dbId'>) =>
-      imageSyncTarget != null && sameWardrobeEntry(item, imageSyncTarget),
-    [imageSyncTarget],
+      includesWardrobeImageTarget(imageSyncTargets, item),
+    [imageSyncTargets],
   );
+
+  useEffect(() => {
+    if (!wardrobeLoaded || items.length === 0) return;
+    // Recover old/migrated imageless rows too, not just the most recent add.
+    // Limit the visible phase to three rows at once; later rows enter as those
+    // spinners settle, while each row keeps its own bounded silent probes.
+    const slots = Math.max(0, 3 - imageSyncTargets.length);
+    if (slots === 0) return;
+    const token = authToken ?? null;
+    const candidates = items
+      .filter((item) => !hasWardrobeImageReference(item))
+      .filter((item) => {
+        const key = wardrobeImageTargetKey(item);
+        return Boolean(
+          key &&
+          !imageBackfillTimersRef.current.has(key) &&
+          !includesWardrobeImageTarget(imageSyncTargets, item)
+        );
+      })
+      .slice(0, slots);
+    for (const item of candidates) scheduleImageBackfillRehydrate(item, token);
+  }, [authToken, imageSyncTargets.length, items, scheduleImageBackfillRehydrate, wardrobeLoaded]);
 
   const loadAppState = useCallback(async (token: string, signal?: AbortSignal): Promise<boolean> => {
     const res = await fetch('/api/me/app-state', {
@@ -1943,7 +2012,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const handleAddItem = useCallback(async (
     item: any,
-  ): Promise<{ persisted: boolean; requiresAuth?: boolean; error?: string; duplicate?: boolean; guestSaved?: boolean }> => {
+  ): Promise<WardrobeAddResult> => {
     const newItem: Fragrance = { ...item };
     // Display gate: an add payload can carry the engine's raw Fragrantica image
     // (community picks, curation deep-links, engine details). That fallback is
@@ -1963,15 +2032,15 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       newItem.name ?? newItem.product?.name,
     );
     if (addKey) {
-      const alreadyInVault = itemsRef.current.some(
+      const existingItem = itemsRef.current.find(
         (existing) =>
           vaultIdentityKey(
             existing.brand ?? (existing as { house?: string }).house ?? existing.product?.brand,
             existing.name ?? existing.product?.name,
           ) === addKey,
       );
-      if (alreadyInVault) {
-        return { persisted: false, duplicate: true };
+      if (existingItem) {
+        return { persisted: false, duplicate: true, item: existingItem };
       }
     }
 
@@ -2034,7 +2103,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           if (!savedHasImage) {
             scheduleImageBackfillRehydrate(savedItem, authToken);
           }
-          return { persisted: true };
+          return { persisted: true, item: savedItem };
         }
         throw new Error('Wardrobe save failed: empty API response');
       } catch (err) {
@@ -2069,10 +2138,10 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // stays false because nothing was written to the server.
     if (nextCount >= GUEST_SAVE_PROMPT_THRESHOLD && !guestPromptDismissed) {
       setIsAuthModalOpen(true);
-      return { persisted: false, guestSaved: true, requiresAuth: true };
+      return { persisted: false, guestSaved: true, requiresAuth: true, item: newItem };
     }
 
-    return { persisted: false, guestSaved: true, requiresAuth: !authToken };
+    return { persisted: false, guestSaved: true, requiresAuth: !authToken, item: newItem };
   }, [authToken, guestPromptDismissed, loadAppState, onboardingCompleted, scheduleImageBackfillRehydrate, setIsAuthModalOpen, toast]);
 
   const handlePersistWardrobeImage = useCallback(async (
@@ -2189,6 +2258,155 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken, toast]);
 
+  const ensureWardrobeImageInternal = useCallback((
+    target: Fragrance,
+    failedUrl?: string,
+  ): Promise<Fragrance | null> => {
+    const targetKey = wardrobeImageTargetKey(target);
+    if (!targetKey) return Promise.resolve(null);
+    const existing = imageEnsureInFlightRef.current.get(targetKey);
+    if (existing) return existing;
+
+    setImageSyncTargets((current) => addWardrobeImageTarget(current, target));
+    const task = (async (): Promise<Fragrance | null> => {
+      if (!authToken) {
+        // Guest rows have no authenticated wardrobe id. Re-run the normal
+        // deferred profile producer once, then let the cheap shared-cache probes
+        // pick up its result and persist it to localStorage.
+        try {
+          const res = await fetch(appApiUrl('/api/scent-profile'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: wardrobeEntryName(target),
+              brand: wardrobeEntryBrand(target),
+            }),
+          });
+          const data = (await res.json().catch(() => null)) as Partial<Fragrance> | null;
+          const imageUrl = typeof data?.imageUrl === 'string' ? data.imageUrl.trim() : '';
+          if (res.ok && imageUrl) {
+            return await handlePersistWardrobeImage(
+              target,
+              failedUrl && imageUrlWithoutRetryVersion(imageUrl) === imageUrlWithoutRetryVersion(failedUrl)
+                ? withImageRetryVersion(imageUrl)
+                : imageUrl,
+              undefined,
+              { suppressToast: true },
+            );
+          }
+        } catch {
+          /* bounded cache probes below remain the non-fatal recovery path */
+        }
+        scheduleImageBackfillRehydrate({ ...target, imageUrl: '' }, null);
+        return null;
+      }
+
+      const rowId = target._dbId ?? target.id;
+      try {
+        const res = await fetch(`/api/wardrobe/${encodeURIComponent(rowId)}/image/ensure`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(failedUrl ? { failedUrl } : {}),
+        });
+        const data = (await res.json().catch(() => null)) as {
+          status?: 'ready' | 'pending';
+          item?: Fragrance;
+        } | null;
+        if (res.status === 202 || data?.status === 'pending') {
+          scheduleImageBackfillRehydrate({ ...target, imageUrl: '' }, authToken);
+          return null;
+        }
+        if (!res.ok || data?.status !== 'ready' || !data.item) {
+          clearImageBackfillForTarget(target);
+          return null;
+        }
+
+        const returnedUrl = typeof data.item.imageUrl === 'string' ? data.item.imageUrl.trim() : '';
+        const displayUrl =
+          failedUrl && returnedUrl &&
+          imageUrlWithoutRetryVersion(returnedUrl) === imageUrlWithoutRetryVersion(failedUrl)
+            ? withImageRetryVersion(returnedUrl)
+            : returnedUrl;
+        const next: Fragrance = {
+          ...target,
+          ...data.item,
+          id: target.id,
+          imageUrl: displayUrl,
+          _dbId: data.item._dbId ?? target._dbId,
+        };
+        setItems((current) => current.map((item) =>
+          sameWardrobeEntry(item, target) ? next : item,
+        ));
+        return next;
+      } catch {
+        clearImageBackfillForTarget(target);
+        return null;
+      }
+    })();
+
+    imageEnsureInFlightRef.current.set(targetKey, task);
+    void task.finally(() => {
+      if (imageEnsureInFlightRef.current.get(targetKey) === task) {
+        imageEnsureInFlightRef.current.delete(targetKey);
+      }
+    });
+    return task;
+  }, [authToken, clearImageBackfillForTarget, handlePersistWardrobeImage, scheduleImageBackfillRehydrate]);
+
+  const ensureWardrobeImage = useCallback(
+    (target: Fragrance) => ensureWardrobeImageInternal(target),
+    [ensureWardrobeImageInternal],
+  );
+
+  const handleWardrobeImageLoad = useCallback((
+    target: Fragrance,
+    imageUrl: string,
+  ) => {
+    const normalized = imageUrlWithoutRetryVersion(imageUrl.trim());
+    const targetKey = wardrobeImageTargetKey(target);
+    for (const failed of [...failedImageUrlsRef.current]) {
+      if (imageUrlWithoutRetryVersion(failed) === normalized) {
+        failedImageUrlsRef.current.delete(failed);
+      }
+    }
+    if (targetKey) {
+      imageFailureReportsRef.current.delete(`${targetKey}\u0000${normalized}`);
+    }
+    clearImageBackfillForTarget(target);
+  }, [clearImageBackfillForTarget]);
+
+  const handleWardrobeImageError = useCallback((
+    target: Fragrance,
+    imageUrl: string,
+  ) => {
+    const failedUrl = imageUrl.trim();
+    const targetKey = wardrobeImageTargetKey(target);
+    if (!targetKey || !failedUrl) return;
+    const reportKey = `${targetKey}\u0000${imageUrlWithoutRetryVersion(failedUrl)}`;
+    if (imageFailureReportsRef.current.has(reportKey)) return;
+    imageFailureReportsRef.current.add(reportKey);
+    failedImageUrlsRef.current.add(imageUrlWithoutRetryVersion(failedUrl));
+
+    // Remove only the exact failed candidate locally. The row-owned ensure API
+    // compares failedUrl server-side, so a stale tab cannot clear a newer manual
+    // image that landed after this render.
+    setItems((current) => {
+      const next = current.map((item) => {
+        if (!sameWardrobeEntry(item, target)) return item;
+        const currentUrl = typeof item.imageUrl === 'string' ? item.imageUrl.trim() : '';
+        return imageUrlWithoutRetryVersion(currentUrl) === imageUrlWithoutRetryVersion(failedUrl)
+          ? { ...item, imageUrl: '' }
+          : item;
+      });
+      if (!authToken) writeGuestWardrobeItems(next);
+      return next;
+    });
+    void ensureWardrobeImageInternal({ ...target, imageUrl: '' }, failedUrl);
+  }, [authToken, ensureWardrobeImageInternal]);
+
   // User-verified metric: persist a single fact (year/gender/concentration/
   // season) the user typed into the detail modal's inline "verify" field. The
   // engine leaves these as "Unknown" when an authoritative source never stated
@@ -2222,7 +2440,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
     // The server applies the same guard; mirror it here so the optimistic update
     // and the "saved" toast don't claim success for a placeholder the API drops.
-    if (field !== 'year' && !usefulFactString(value)) {
+    if (field !== 'year' && !usefulFragranceFact(value, { rejectUniversal: field === 'season' })) {
       toast({
         title: "That reads as “unknown”",
         description: 'Enter the real value (e.g. Eau de Parfum) to verify this detail.',
@@ -2506,6 +2724,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!authToken || !wardrobeLoaded || items.length === 0) return;
     const abortController = new AbortController();
     let cancelled = false;
+    // A newly added row must not inherit the previous empty-queue cooldown.
+    detailRefreshIdleUntilRef.current = 0;
 
     // One-time heal re-sync: a complete row that the normal refresh path would
     // skip still gets re-fetched once if it hasn't been re-synced for the
@@ -2571,6 +2791,12 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return;
       }
       detailRefreshIdleUntilRef.current = 0;
+      const activeKeys = new Set(targets.map(detailRefreshKeyFor));
+      setDetailRefreshKeys((current) => {
+        const next = new Set(current);
+        for (const key of activeKeys) next.add(key);
+        return next;
+      });
 
       enrichmentRefreshInFlightRef.current = true;
       try {
@@ -2640,6 +2866,11 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
       } finally {
         enrichmentRefreshInFlightRef.current = false;
+        setDetailRefreshKeys((current) => {
+          const next = new Set(current);
+          for (const key of activeKeys) next.delete(key);
+          return next.size === current.size ? current : next;
+        });
       }
     };
 
@@ -2649,8 +2880,15 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       cancelled = true;
       abortController.abort();
       window.clearInterval(id);
+      setDetailRefreshKeys(new Set());
     };
   }, [authToken, wardrobeLoaded, items.length, handlePersistWardrobeDetailRefreshBatch]);
+
+  const isDetailRefreshing = useCallback(
+    (item: Pick<Fragrance, 'id' | '_dbId'>) =>
+      detailRefreshKeys.has(detailRefreshKeyFor(item)),
+    [detailRefreshKeys],
+  );
 
   const handleRevertWardrobe = useCallback(() => {
     if (!wardrobeRevertSnapshot) return;
@@ -2873,6 +3111,10 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     pendingDetailOpen,
     pendingDetailOpenSourceLayoutId,
     isImageSyncing,
+    isDetailRefreshing,
+    handleWardrobeImageLoad,
+    handleWardrobeImageError,
+    ensureWardrobeImage,
     setItems,
     setIsIntentModalOpen,
     setIsShareModalOpen,
@@ -2919,6 +3161,10 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     pendingDetailOpen,
     pendingDetailOpenSourceLayoutId,
     isImageSyncing,
+    isDetailRefreshing,
+    handleWardrobeImageLoad,
+    handleWardrobeImageError,
+    ensureWardrobeImage,
     loadWardrobe,
     retryLoadWardrobe,
     handleAddItem,
