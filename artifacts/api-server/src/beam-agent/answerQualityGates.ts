@@ -322,6 +322,92 @@ function recommendsAvoidedNote(text: string, grounded: BeamGroundedFragrance[]):
   return grounded.some((item) => item.matchedAvoid === true && answerMentionsFragrance(text, item));
 }
 
+/**
+ * Tokens too generic to prove a stated-name match on their own (articles,
+ * prepositions, concentration words). Deliberately small: real distinguishing
+ * words like "intense" or "noir" stay significant.
+ */
+const STATED_NAME_STOPWORDS = new Set([
+  "the", "a", "an", "de", "du", "des", "la", "le", "les", "di", "da", "del",
+  "by", "and", "of", "for", "eau", "edt", "edp", "edc", "no",
+]);
+
+function significantNameTokens(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= 3 && !STATED_NAME_STOPWORDS.has(token));
+}
+
+/**
+ * Equal, or within ONE edit for tokens of 5+ chars — dictated names arrive
+ * slightly mangled ("casamorti" for "casamorati", "lowe" for "lowell"), so an
+ * exact-only match would reject the very picks the constraint asks for.
+ */
+function tokensRoughlyEqual(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length < 5 || b.length < 5) return false;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) {
+      i += 1;
+      j += 1;
+      continue;
+    }
+    edits += 1;
+    if (edits > 1) return false;
+    if (a.length > b.length) i += 1;
+    else if (b.length > a.length) j += 1;
+    else {
+      i += 1;
+      j += 1;
+    }
+  }
+  edits += a.length - i + (b.length - j);
+  return edits <= 1;
+}
+
+function matchesStatedName(item: BeamGroundedFragrance, statedNames: string[]): boolean {
+  const itemTokens = significantNameTokens(`${item.brand ?? ""} ${item.canonicalName}`);
+  return statedNames.some((stated) =>
+    significantNameTokens(stated).some((statedToken) =>
+      itemTokens.some((token) => tokensRoughlyEqual(token, statedToken)),
+    ),
+  );
+}
+
+/**
+ * Stated-collection backstop: the user LISTED the fragrances they have
+ * ("I have Jean Lowe, casamorti mefisto, club de nuit intense…") or explicitly
+ * restricted picks to that list, yet the answer commits to grounded picks NONE
+ * of which even roughly matches a stated name — i.e. the model scored the
+ * whole DB vault and ignored the list entirely (the live "Casamorati Fiero /
+ * Original Vetiver" complaint). Fires only on a TOTAL miss so a partially
+ * matching answer (right list, plus a taste reference) is never hard-failed,
+ * and stays silent for new-only missions where unowned discoveries are the
+ * whole point.
+ */
+function ignoresStatedCollection(
+  text: string,
+  state: BeamSessionState | undefined,
+  grounded: BeamGroundedFragrance[],
+): boolean {
+  const stated = state?.statedFragrances ?? [];
+  if (stated.length === 0) return false;
+  if (stated.length < 2 && !state?.statedOnly) return false;
+  const mission = state?.mission;
+  if (mission?.newness === "new") return false;
+  if (mission?.intent === "travel_kit" && (mission.ownedCount ?? 0) === 0 && (mission.newCount ?? 0) > 0) {
+    return false;
+  }
+  const named = grounded.filter((item) => answerMentionsFragrance(text, item));
+  if (named.length === 0) return false;
+  return !named.some((item) => matchesStatedName(item, stated));
+}
+
 function missionReadyForFulfillment(state: BeamSessionState | undefined): boolean {
   const mission = state?.mission;
   if (mission?.intent !== "travel_kit") return false;
@@ -456,6 +542,9 @@ export function runAnswerQualityGates(answerText: string, input: QualityGateInpu
   if (recommendsAvoidedNote(text, input.groundedFragrances ?? [])) {
     violations.push("recommends_avoided_note");
   }
+  if (ignoresStatedCollection(text, input.sessionState, input.groundedFragrances ?? [])) {
+    violations.push("stated_collection_ignored");
+  }
 
   const mission = input.sessionState?.mission;
   // Once a complete kit has been presented, a follow-up turn is a REFINEMENT
@@ -568,6 +657,8 @@ export function repairInstructionFor(violations: string[]): string {
     fixes.push("Do not recommend an owned bottle in this new-only mission. If mentioned, move it to a separate line explicitly labeled 'Taste reference from your vault'.");
   if (violations.includes("recommends_avoided_note"))
     fixes.push("You recommended a fragrance built around a note the user asked to avoid - replace it with a grounded pick that does not feature that note.");
+  if (violations.includes("stated_collection_ignored"))
+    fixes.push("The user told you exactly which fragrances they have - recommend ONLY from that stated list, resolving their typed/dictated names to the real fragrances they meant (exact flanker, never a same-brand sibling); do not substitute other bottles from their vault or the catalog.");
   if (violations.includes("recommendation_without_grounded_pick"))
     fixes.push("You committed to a recommendation but named no specific fragrance - commit to a specific grounded pick from the retrieved results.");
   if (violations.includes("leaked_external_instruction"))

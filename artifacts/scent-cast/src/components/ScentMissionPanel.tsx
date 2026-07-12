@@ -3097,10 +3097,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <div className="relative mx-auto w-full max-w-[52rem] overflow-hidden rounded-[calc(var(--radius-scent)-14px)]">
       {/* Subtle top/bottom fade hints — shown only when the conversation actually
           overflows above/below, so a long answer reads as "more to scroll"
-          rather than a hard clip. Pointer-events-none keeps them non-blocking. */}
+          rather than a hard clip. Pointer-events-none keeps them non-blocking.
+          The top fade's midpoint stays LIGHT (/45): at /80 the band was still
+          near-opaque halfway down its 40px, so with only pt-3 of content
+          padding the first message's top lines vanished under it and read as
+          clipped text rather than a scroll hint (live iPhone report). */}
       <div
         aria-hidden
-        className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-10 rounded-t-[calc(var(--radius-scent)-14px)] bg-gradient-to-b from-[#050403] via-[#050403]/80 to-transparent transition-opacity duration-300 ${scrollEdges.top ? 'opacity-100' : 'opacity-0'}`}
+        className={`pointer-events-none absolute inset-x-0 top-0 z-10 h-10 rounded-t-[calc(var(--radius-scent)-14px)] bg-gradient-to-b from-[#050403] via-[#050403]/45 to-transparent transition-opacity duration-300 ${scrollEdges.top ? 'opacity-100' : 'opacity-0'}`}
       />
       <div
         aria-hidden

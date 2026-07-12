@@ -86,11 +86,21 @@ const MAX_WARDROBE_NUDGES = 2;
  * re-ask nit. Substantive correctness/safety gates (price/availability/review
  * evidence, mission fulfillment, destination match, owned-pick-in-new-only,
  * instruction leaks, over-length) are NOT in this set and still fail the run.
+ *
+ * `stated_collection_ignored` is the one substantive member: the answer named
+ * only picks outside the fragrance list the user typed out. It still gets the
+ * repair pass (which feeds the "recommend only from the stated list" fix back
+ * to the model), but when the run grounded none of the stated bottles a repair
+ * cannot conjure them — the allowlist forbids un-grounded names — so failing
+ * the run terminally would trade a suboptimal-but-real answer for a dead
+ * "quality_gate_failed" error. Ship-with-flag is the lesser harm; the prompt
+ * constraint (beamSessionStatePrompt) is the primary enforcement upstream.
  */
 const SOFT_FLOW_VIOLATIONS = new Set([
   "pending_slot_abandoned",
   "redundant_clarification",
   "delegated_but_questioned",
+  "stated_collection_ignored",
 ]);
 
 /**

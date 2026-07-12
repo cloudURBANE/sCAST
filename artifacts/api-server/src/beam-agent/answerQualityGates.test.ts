@@ -800,3 +800,94 @@ test("echoing the user's own stated budget is not an unsupported price claim", (
   const bare = runAnswerQualityGates("It costs $80.", NO_EVIDENCE);
   assert.equal(bare.violations.includes("price_without_evidence"), true);
 });
+
+/* ------------------------------------------------------------------ */
+/* stated_collection_ignored — recommend only from the user's stated list */
+/* ------------------------------------------------------------------ */
+
+const STATED_LIST = [
+  "Jean Lowe",
+  "casamorti mefisto",
+  "club de until intense",
+  "gentle fluidity slicer",
+  "oud wonder",
+  "fucking fabulous by tom",
+];
+
+test("an answer that ignores the user's stated list entirely is flagged", () => {
+  const state = { slots: {}, statedFragrances: STATED_LIST };
+  const grounded = [
+    { canonicalName: "Original Vetiver", brand: "Creed", owned: true },
+    { canonicalName: "Bleu de Chanel", brand: "Chanel", owned: true },
+  ];
+  const r = runAnswerQualityGates(
+    "Go with **Creed Original Vetiver** — crisp vetiver-leaf dryness for today's clear sky.",
+    { ...NO_EVIDENCE, sessionState: state, groundedFragrances: grounded },
+  );
+  assert.ok(r.violations.includes("stated_collection_ignored"), r.violations.join(","));
+});
+
+test("a pick resolved from a dictated stated name passes (fuzzy token match)", () => {
+  const state = { slots: {}, statedFragrances: STATED_LIST };
+  const grounded = [
+    { canonicalName: "Club de Nuit Intense Man", brand: "Armaf", owned: true },
+    { canonicalName: "Gentle Fluidity Silver", brand: "Maison Francis Kurkdjian", owned: true },
+  ];
+  const r = runAnswerQualityGates(
+    "Reach for **Armaf Club de Nuit Intense Man** tonight; **Gentle Fluidity Silver** is the runner-up.",
+    { ...NO_EVIDENCE, sessionState: state, groundedFragrances: grounded },
+  );
+  assert.equal(r.violations.includes("stated_collection_ignored"), false, r.violations.join(","));
+});
+
+test("without a stated list the gate never fires", () => {
+  const grounded = [{ canonicalName: "Original Vetiver", brand: "Creed", owned: true }];
+  const r = runAnswerQualityGates("Go with **Creed Original Vetiver** today.", {
+    ...NO_EVIDENCE,
+    sessionState: { slots: {} },
+    groundedFragrances: grounded,
+  });
+  assert.equal(r.violations.includes("stated_collection_ignored"), false, r.violations.join(","));
+});
+
+test("a single stated name is enforced once the user says 'only the ones I told you'", () => {
+  const state = { slots: {}, statedFragrances: ["gentle fluidity slicer"], statedOnly: true };
+  const grounded = [
+    { canonicalName: "Original Vetiver", brand: "Creed", owned: true },
+    { canonicalName: "Gentle Fluidity Silver", brand: "Maison Francis Kurkdjian", owned: true },
+  ];
+  const miss = runAnswerQualityGates("Wear **Creed Original Vetiver** tonight.", {
+    ...NO_EVIDENCE,
+    sessionState: state,
+    groundedFragrances: grounded,
+  });
+  assert.ok(miss.violations.includes("stated_collection_ignored"), miss.violations.join(","));
+
+  const hit = runAnswerQualityGates("Wear **Gentle Fluidity Silver** tonight.", {
+    ...NO_EVIDENCE,
+    sessionState: state,
+    groundedFragrances: grounded,
+  });
+  assert.equal(hit.violations.includes("stated_collection_ignored"), false, hit.violations.join(","));
+});
+
+test("a new-only mission is exempt from the stated-collection gate", () => {
+  const state = {
+    slots: {},
+    statedFragrances: STATED_LIST,
+    mission: { intent: "recommendation" as const, newness: "new" as const },
+  };
+  const grounded = [{ canonicalName: "Original Vetiver", brand: "Creed", owned: false }];
+  const r = runAnswerQualityGates("Try **Creed Original Vetiver** — new to you and weather-right.", {
+    ...NO_EVIDENCE,
+    sessionState: state,
+    groundedFragrances: grounded,
+  });
+  assert.equal(r.violations.includes("stated_collection_ignored"), false, r.violations.join(","));
+});
+
+test("repairInstructionFor explains the stated-collection fix", () => {
+  const msg = repairInstructionFor(["stated_collection_ignored"]);
+  assert.match(msg, /stated list/i);
+  assert.match(msg, /exact flanker/i);
+});
