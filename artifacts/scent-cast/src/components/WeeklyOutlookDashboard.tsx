@@ -104,6 +104,23 @@ function relativeDayLabel(iso: string): string {
   return `${date.toLocaleDateString(undefined, { weekday: 'long' })}'s pick`;
 }
 
+/** In-sentence version of the same relative register: "today" / "tomorrow" /
+ *  weekday name. The reason line used to always say the weekday ("Picked for
+ *  Saturday…") while the header above it said "Today's pick" — two registers
+ *  for the same day in one card. */
+function relativeDayPhrase(iso: string): string {
+  const date = forecastDate(iso);
+  if (!date) return 'today';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  const dayOffset = Math.round((date.getTime() - today.getTime()) / 86_400_000);
+
+  if (dayOffset === 0) return 'today';
+  if (dayOffset === 1) return 'tomorrow';
+  return date.toLocaleDateString(undefined, { weekday: 'long' });
+}
+
 function dedupeLabels(labels: string[]): string[] {
   const seen = new Set<string>();
   return labels.filter((label) => {
@@ -314,7 +331,7 @@ function crowdScore(item: Fragrance): number | null {
  * spray load) live in the metadata pill above it.
  */
 function describeForecastPick(day: WeatherForecastDay, pick: WeatherOutlookPick): string {
-  const weekday = forecastDate(day.date)?.toLocaleDateString(undefined, { weekday: 'long' }) ?? 'today';
+  const weekday = relativeDayPhrase(day.date);
   const character = pickCharacter(pick.item);
   const mood = temperatureMood(day);
 
@@ -332,6 +349,60 @@ function describeForecastPick(day: WeatherForecastDay, pick: WeatherOutlookPick)
   const verdict = WEAR_WINDOW_PHRASE[pick.recommendation.wear_window] ?? 'balances well today';
   const tail = mood ? ` in ${mood} air` : '';
   return `Picked for ${weekday}: its ${character} character ${verdict}${tail}.`;
+}
+
+/** Pace of the reason line's type-on reveal. The delay lets the hero's slide
+ *  (0.34s) land first so the module reads as a sequence — bottle arrives, data
+ *  fades in, then the day's verdict is written out — instead of everything
+ *  snapping at once. ~26ms/char puts a typical 90-char sentence at ~2.3s. */
+const TYPE_MS_PER_CHAR = 26;
+const TYPE_START_DELAY_MS = 480;
+
+/**
+ * Types the "why this bottle today" line out slowly, character by character —
+ * the forecast being written for you, and the module's one moment of ongoing
+ * motion after the hero settles. Layout is reserved up front: the untyped tail
+ * stays in the flow as an invisible (not absent) span, so the sentence wraps
+ * identically at every frame and the day rail below never reflows mid-type.
+ * Screen readers get the whole sentence at once via aria-label; reduced-motion
+ * users see it instantly.
+ */
+function TypedReasonLine({ text }: { text: string }) {
+  const prefersReducedMotion = useReducedMotion() === true;
+  const [typedChars, setTypedChars] = useState(() => (prefersReducedMotion ? text.length : 0));
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setTypedChars(text.length);
+      return;
+    }
+    setTypedChars(0);
+    let frame = 0;
+    let start: number | null = null;
+    const tick = (now: number) => {
+      if (start === null) start = now;
+      const elapsed = now - start - TYPE_START_DELAY_MS;
+      const next = elapsed <= 0 ? 0 : Math.min(text.length, Math.ceil(elapsed / TYPE_MS_PER_CHAR));
+      setTypedChars(next);
+      if (next < text.length) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [text, prefersReducedMotion]);
+
+  return (
+    // Same optics the static line carried: brighter serif italic, width-capped,
+    // balance-wrapped, two-line clamp — see the render-site comment.
+    <p
+      aria-label={text}
+      className="mx-auto mt-[var(--fc-hero-pill)] max-w-[28rem] px-4 text-center font-serif text-[clamp(0.9rem,3.3vw,1.05rem)] italic leading-snug text-balance line-clamp-2 text-scent-text-primary md:max-w-[32rem] md:text-[clamp(0.98rem,1.6vw,1.14rem)]"
+    >
+      <span aria-hidden="true">
+        {text.slice(0, typedChars)}
+        <span className="invisible">{text.slice(typedChars)}</span>
+      </span>
+    </p>
+  );
 }
 
 function ForecastHero({
@@ -484,6 +555,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
   weather,
   onSelectFragrance,
 }) => {
+  const prefersReducedMotion = useReducedMotion() === true;
   const forecast = useMemo(
     () => (weather?.forecast ?? []).filter((day) => !isPastForecastDay(day.date)),
     [weather?.forecast],
@@ -580,10 +652,14 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
       className="scent-forecast mx-auto w-full max-w-[52rem] min-w-0 text-center"
       aria-label="Scent forecast"
     >
-      {/* text-indent matches the tracking so the uppercase title's trailing
-          letter-spacing doesn't pull it optically left of the centered axis.
-          .forecast-title adds the two fading gold hairlines flanking the label. */}
-      <h2 className="forecast-title scent-type-label text-[10px] tracking-[0.34em] text-scent-text-secondary [text-indent:0.34em] sm:text-[12px]">
+      {/* Editorial masthead — the title speaks in the same serif-italic voice as
+          the page mastheads ("Vault of Aromas", the search headline) instead of
+          the tracked micro-label the data chrome uses (HUMIDITY / TIME). As a
+          10px tracked label the module's own name read as one more piece of
+          metadata; the serif names it as the daily editorial feature it is.
+          Scaled to a module (not page) register so the hero below stays the
+          focal point. */}
+      <h2 className="forecast-title font-serif italic text-[clamp(1.35rem,4.8vw,1.6rem)] tracking-normal leading-none text-[#fff7ec] sm:text-[clamp(1.55rem,2.5vw,1.85rem)]">
         Scent Forecast
       </h2>
 
@@ -612,12 +688,15 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               bottle column (a 141px bottle in a 224px slot); the wider row lets
               the square genuinely earn the sm slot height. */}
           <div className="relative mx-auto mt-[var(--fc-title-hero)] w-full max-w-[27rem] overflow-hidden rounded-[28px] border border-scent-accent/20 bg-gradient-to-b from-white/[0.045] via-black/20 to-black/35 sm:max-w-[34rem] sm:rounded-[32px] md:max-w-[42rem] lg:max-w-[46rem]">
-            <div className="flex items-center justify-between border-b border-white/[0.055] px-4 py-2.5 sm:px-5 sm:py-3">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.2em] text-scent-accent/85 sm:text-[10px]">
+            {/* Centered on the card's axis like every other line in the module.
+                The old right-aligned "1 of 7" counter is gone: the seven-day rail
+                below already communicates position (labeled, tappable tiles with a
+                highlighted selection — the richer affordance), so the counter was
+                duplicate positional chrome that also pulled the day label off the
+                centered axis. text-indent matches the tracking for optical center. */}
+            <div className="flex items-center justify-center border-b border-white/[0.055] px-4 py-2.5 sm:px-5 sm:py-3">
+              <p className="text-[9px] font-semibold uppercase tracking-[0.2em] [text-indent:0.2em] text-scent-accent/85 sm:text-[10px]">
                 {relativeDayLabel(activePlan.day.date)}
-              </p>
-              <p className="text-[9px] font-medium uppercase tracking-[0.16em] text-scent-text-subtle sm:text-[10px]">
-                {selected + 1} of {Math.min(outlook.length, 7)}
               </p>
             </div>
 
@@ -638,10 +717,18 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
             </div>
 
             {/* Weather + spray metadata stays inside the recommendation frame so
-                the bottle, day context, and wear guidance read as one module. */}
+                the bottle, day context, and wear guidance read as one module.
+                Keyed on the day and faded in on a short delay so the reveal
+                sequences after the hero slide (bottle → data → typed verdict)
+                instead of every line landing on the same frame. */}
             {activeMeta.length > 0 ? (
               <div className="flex justify-center px-3 pb-3.5 sm:pb-4">
-                <div className="forecast-meta-pill inline-flex min-h-8 max-w-full items-center gap-2 text-scent-text-secondary md:gap-2.5">
+                <m.div
+                  key={activePlan.day.date}
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: prefersReducedMotion ? 0.01 : 0.45, delay: prefersReducedMotion ? 0 : 0.18, ease: CALM_EASE }}
+                  className="forecast-meta-pill inline-flex min-h-8 max-w-full items-center gap-2 text-scent-text-secondary md:gap-2.5">
                   <span className="flex items-center text-scent-accent/75" aria-hidden>
                     <WeatherGlyph day={activePlan.day} size={14} />
                   </span>
@@ -651,7 +738,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                     </span>
                     {` · ${activeMeta.join(' · ')}`}
                   </span>
-                </div>
+                </m.div>
               </div>
             ) : null}
           </div>
@@ -660,16 +747,11 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               behind the pick (its character + the strongest real reason it was
               chosen for the day). Width-capped, balance-wrapped, and clamped to two
               lines so it stays optically centered and always fits the forecast
-              column without ever crowding the day rail below. */}
-          {activeReason ? (
-            // Brighter (was text-scent-text-secondary) and a touch larger so the
-            // "why this bottle today" line is legible on a real phone outdoors —
-            // it was soft enough to skip. Italic serif + smaller-than-name keeps
-            // it clearly supporting copy despite the lift in contrast.
-            <p className="mx-auto mt-[var(--fc-hero-pill)] max-w-[28rem] px-4 text-center font-serif text-[clamp(0.9rem,3.3vw,1.05rem)] italic leading-snug text-balance line-clamp-2 text-scent-text-primary md:max-w-[32rem] md:text-[clamp(0.98rem,1.6vw,1.14rem)]">
-              {activeReason}
-            </p>
-          ) : null}
+              column without ever crowding the day rail below. Brighter than the
+              old text-scent-text-secondary so it's legible on a real phone
+              outdoors; italic serif + smaller-than-name keeps it supporting copy.
+              Typed on slowly (TypedReasonLine) as the last beat of the reveal. */}
+          {activeReason ? <TypedReasonLine text={activeReason} /> : null}
 
           {/* Seven calendar tiles, each a MINI of the community fragrance-detail
               card frame (`.forecast-day-tile` in index.css): a deep near-black
