@@ -137,6 +137,26 @@ export type BeamSessionState = {
   slots: BeamSessionSlots;
   mission?: BeamMissionState;
   userDelegatedChoice?: boolean;
+  /**
+   * Fragrance names the user stated they HAVE, listed in their own message
+   * ("I have Jean Lowe, casamorati mefisto, club de nuit intense and oud
+   * wonder…"). Typed/dictated, so possibly misspelled — consumers must resolve
+   * each to a real catalog/vault fragrance rather than trust the spelling.
+   * Captured by `deriveBeamSessionState`, surfaced by `beamSessionStatePrompt`
+   * as the candidate set to pick from, and backstopped by the
+   * `stated_collection_ignored` answer gate. Without this the list was reduced
+   * to nothing structured, so the agent scored the whole DB vault and
+   * recommended bottles the user never mentioned.
+   */
+  statedFragrances?: string[];
+  /**
+   * The user explicitly restricted picks to the fragrances they named ("focus
+   * on only the fragrances I told you I have"). A hard constraint even when
+   * the stated list itself could not be parsed from an earlier turn — the
+   * prompt then directs the model to re-read the conversation for the named
+   * bottles.
+   */
+  statedOnly?: boolean;
   /** Slot the last assistant question is still collecting. */
   pendingSlot?: BeamSlotKey;
   /** The latest turn supplied useful context, but did not answer pendingSlot. */

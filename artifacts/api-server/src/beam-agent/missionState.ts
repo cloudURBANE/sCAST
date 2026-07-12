@@ -700,6 +700,130 @@ function parseNewness(text: string): "new" | "owned" | undefined {
   return undefined;
 }
 
+/** Max stated-fragrance names kept in session state. */
+const MAX_STATED_FRAGRANCES = 12;
+
+/**
+ * Ownership lead-ins that introduce a list of fragrances the user HAS ("I have
+ * A, B and C", "I've got A and B with me"). The lookahead window after the
+ * match is what gets segmented into candidate names.
+ */
+const STATED_LIST_LEAD =
+  /\bi(?:'?ve)?\s+(?:currently\s+|only\s+|just\s+)?(?:have|own|got|brought|packed)\b(?:\s+(?:with\s+me|on\s+me|here))?[:,]?\s+/gi;
+
+/**
+ * Words that terminate a candidate fragrance-name segment. Dictated messages
+ * run sentences together with no punctuation ("…fabulous by tom does compare
+ * to weather and understand…"), so a verb/question/filler token is the only
+ * reliable boundary between the last listed name and the rest of the request.
+ */
+const STATED_SEGMENT_BOUNDARY = new Set([
+  "does", "do", "did", "is", "are", "was", "were", "can", "could", "should", "would", "will",
+  "compare", "compares", "compared", "comparing", "understand", "tell", "give", "recommend",
+  "suggest", "pick", "choose", "match", "what", "which", "when", "where", "how", "why",
+  "that", "this", "these", "those", "so", "then", "because", "since", "versus", "vs",
+  "rn", "right", "now", "today", "tonight", "tomorrow", "please", "thanks", "thank",
+  "i", "you", "we", "my", "your", "it", "its",
+]);
+
+/** A segment starting with one of these is a quantity/figure of speech, not a name. */
+const STATED_SEGMENT_REJECT_LEAD = new Set([
+  "a", "an", "the", "some", "any", "few", "couple", "no", "not", "nothing", "only", "just",
+  "my", "our", "his", "her", "their", "one", "two", "three", "four", "five", "several",
+  "many", "more", "lots", "lot", "tons", "ton", "plenty", "all", "every",
+]);
+
+/** Segments made ONLY of these generic nouns are not fragrance names. */
+const STATED_SEGMENT_GENERIC = new Set([
+  "fragrance", "fragrances", "scent", "scents", "cologne", "colognes", "perfume", "perfumes",
+  "bottle", "bottles", "stuff", "things", "ones", "one", "them", "those", "these", "it",
+]);
+
+/**
+ * A segment containing one of these is outfit/body/schedule/weather talk,
+ * never a fragrance name ("I have work at 9 and dinner at 7", "i have a fly
+ * ass black and whit fit on", "I have oily skin and a sensitive nose").
+ */
+const STATED_SEGMENT_NOISE =
+  /\b(?:fit|outfit|shirt|pants|jeans|dress|shoes|jacket|suit|weather|degrees?|humidity|forecast|idea|clue|question|time|money|allergy|allergies|skin|nose|hair|beard|work|meeting|interview|date|dinner|brunch|lunch|party|wedding|funeral|graduation|gym|school|class|church|appointment|flight|train|shift)\b/i;
+
+/**
+ * Clean one comma/"and"-separated segment into a candidate fragrance name, or
+ * return undefined when it clearly isn't one. Keeps at most 6 leading tokens
+ * up to the first boundary word, so a run-on dictated tail ("fucking fabulous
+ * by tom does compare to weather…") is clipped to the name itself.
+ */
+function cleanStatedSegment(segment: string): string | undefined {
+  const tokens = segment
+    .replace(/[.!?;:"“”()]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const kept: string[] = [];
+  for (const token of tokens) {
+    const bare = token.toLowerCase().replace(/[^a-z0-9''-]/g, "");
+    if (STATED_SEGMENT_BOUNDARY.has(bare)) break;
+    kept.push(token);
+    if (kept.length >= 6) break;
+  }
+  if (kept.length === 0) return undefined;
+  // A lone short token is a truncation stub or filler ("whit", "rn"), not a name.
+  if (kept.length === 1 && kept[0].replace(/[^A-Za-z0-9]/g, "").length < 5) return undefined;
+  const leading = kept[0].toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (STATED_SEGMENT_REJECT_LEAD.has(leading)) return undefined;
+  const value = kept.join(" ").replace(/[,'’]+$/g, "").trim();
+  if (!value || value.length > 60) return undefined;
+  if (STATED_SEGMENT_NOISE.test(value)) return undefined;
+  if (kept.every((token) => STATED_SEGMENT_GENERIC.has(token.toLowerCase().replace(/[^a-z]/g, "")))) {
+    return undefined;
+  }
+  return value;
+}
+
+/**
+ * Capture the fragrances the user LISTED as having ("I have Jean Lowe,
+ * casamorti mefisto, club de nuit intense and oud wonder…"). Requires at least
+ * TWO plausible names after filtering so "I have a date tonight" / "I have no
+ * idea" never register. Names are kept verbatim (dictation and all) — the
+ * prompt tells the model to resolve each to the real fragrance, and the gate
+ * matches tokens fuzzily.
+ */
+function parseStatedFragrances(text: string): string[] | undefined {
+  const found: string[] = [];
+  const lead = new RegExp(STATED_LIST_LEAD.source, STATED_LIST_LEAD.flags);
+  for (let match = lead.exec(text); match; match = lead.exec(text)) {
+    // "do I have…", "what if I have…" are questions/hypotheticals, not lists.
+    const prefix = text.slice(Math.max(0, match.index - 12), match.index);
+    if (/\b(?:do|did|does|should|would|could|if|what|which|where|when)\s*$/i.test(prefix)) continue;
+    // The list ends at sentence punctuation (or a hard cap for run-on dictation).
+    const sentence = text.slice(lead.lastIndex).split(/[.!?;\n]/, 1)[0];
+    const segments = sentence.slice(0, 240).split(/\s*,\s*|\s+(?:and|&|plus)\s+/i);
+    // The cap can cut mid-phrase; a truncated trailing segment is a stub, not a name.
+    if (sentence.length > 240) segments.pop();
+    for (const segment of segments) {
+      const value = cleanStatedSegment(segment);
+      if (value && !found.some((item) => item.toLowerCase() === value.toLowerCase())) {
+        found.push(value);
+      }
+      if (found.length >= MAX_STATED_FRAGRANCES) break;
+    }
+    if (lead.lastIndex === match.index) lead.lastIndex += 1; // zero-width guard
+  }
+  return found.length >= 2 ? found : undefined;
+}
+
+/**
+ * The user explicitly restricted picks to the fragrances they told us they
+ * have ("No, focus on only the fragrances I told you I have rn", "just the
+ * ones I mentioned"). This is the correction turn after the agent recommended
+ * from the wider vault; it must become a HARD constraint, not free prose.
+ */
+const STATED_ONLY_PATTERN =
+  /\b(?:only|just)\s+(?:the\s+|those\s+|these\s+)?(?:fragrances?|scents?|colognes?|perfumes?|bottles?|ones?)\s+(?:that\s+|which\s+)?i(?:'?ve)?\s+(?:told|mentioned|listed|named|gave|said|have|own|got)\b|\bfocus\s+(?:only\s+)?on\s+(?:only\s+)?(?:the\s+|those\s+|these\s+)?(?:fragrances?|scents?|colognes?|perfumes?|bottles?|ones?)\s+(?:that\s+|which\s+)?i(?:'?ve)?\s+(?:told|mentioned|listed|named|gave|said|have|own|got)\b|\b(?:from|among|out\s+of|stick\s+to|use)\s+(?:only\s+)?(?:the\s+|those\s+|these\s+)(?:fragrances?|scents?|colognes?|perfumes?|bottles?|ones?)\s+(?:that\s+|which\s+)?i(?:'?ve)?\s+(?:told|mentioned|listed|named|gave|said)\b/i;
+
+function parseStatedOnly(text: string): boolean {
+  return STATED_ONLY_PATTERN.test(text);
+}
+
 function parseMissionPatch(text: string, slots: BeamSessionSlots): BeamMissionState | undefined {
   const ownedCount = parseOwnedCount(text);
   const newCount = parseNewCount(text);
@@ -758,6 +882,8 @@ export function cloneBeamSessionState(state: BeamSessionState | undefined): Beam
     slots: { ...state.slots },
     ...(state.mission ? { mission: { ...state.mission } } : {}),
     ...(state.userDelegatedChoice ? { userDelegatedChoice: true } : {}),
+    ...(state.statedFragrances?.length ? { statedFragrances: [...state.statedFragrances] } : {}),
+    ...(state.statedOnly ? { statedOnly: true } : {}),
     ...(state.pendingSlot ? { pendingSlot: state.pendingSlot } : {}),
     ...(state.pendingSlotUnanswered ? { pendingSlotUnanswered: true } : {}),
   };
@@ -792,10 +918,19 @@ export function sanitizeBeamSessionState(value: unknown): BeamSessionState {
     if (Object.keys(mission).length === 0) mission = undefined;
   }
 
+  const statedFragrances = Array.isArray(record.statedFragrances)
+    ? record.statedFragrances
+        .filter((item): item is string => typeof item === "string" && Boolean(item.trim()))
+        .map((item) => item.trim().slice(0, 60))
+        .slice(0, MAX_STATED_FRAGRANCES)
+    : [];
+
   return {
     slots,
     ...(mission ? { mission } : {}),
     ...(record.userDelegatedChoice === true ? { userDelegatedChoice: true } : {}),
+    ...(statedFragrances.length > 0 ? { statedFragrances } : {}),
+    ...(record.statedOnly === true ? { statedOnly: true } : {}),
     ...(typeof record.pendingSlot === "string" && SLOT_KEYS.includes(record.pendingSlot as BeamSlotKey)
       ? { pendingSlot: record.pendingSlot as BeamSlotKey }
       : {}),
@@ -839,22 +974,38 @@ export function mergeBeamSessionState(previous: BeamSessionState | undefined, pa
   const slots: BeamSessionSlots = mergeSlots(base.slots, patch.slots);
   const mission = base.mission || patch.mission ? { ...base.mission, ...patch.mission } : undefined;
 
+  // Stated-collection constraints accumulate like `avoid`: the list grows
+  // (deduped, capped) across turns, and a correction turn's statedOnly flag
+  // sticks until an explicit mission boundary resets the whole state.
+  const statedFragrances: string[] = [];
+  for (const value of [...(base.statedFragrances ?? []), ...(patch.statedFragrances ?? [])]) {
+    if (!statedFragrances.some((item) => item.toLowerCase() === value.toLowerCase())) {
+      statedFragrances.push(value);
+    }
+    if (statedFragrances.length >= MAX_STATED_FRAGRANCES) break;
+  }
+  const statedFields = {
+    ...(statedFragrances.length > 0 ? { statedFragrances } : {}),
+    ...(base.statedOnly || patch.statedOnly ? { statedOnly: true as const } : {}),
+  };
+
   if (mission?.intent === "travel_kit") {
     if (slots.destination) mission.destination = slots.destination;
     if (slots.month) mission.month = slots.month;
   }
   if (patch.userDelegatedChoice) {
     if (mission) mission.userDelegatedChoice = true;
-    return { slots, ...(mission ? { mission } : {}), userDelegatedChoice: true };
+    return { slots, ...(mission ? { mission } : {}), ...statedFields, userDelegatedChoice: true };
   }
   if (patch.mission?.userDelegatedChoice) {
     if (mission) mission.userDelegatedChoice = true;
-    return { slots, ...(mission ? { mission } : {}), userDelegatedChoice: true };
+    return { slots, ...(mission ? { mission } : {}), ...statedFields, userDelegatedChoice: true };
   }
 
   return {
     slots,
     ...(mission ? { mission } : {}),
+    ...statedFields,
     ...(base.userDelegatedChoice ? { userDelegatedChoice: true } : {}),
     ...(patch.pendingSlot ? { pendingSlot: patch.pendingSlot } : {}),
     ...(patch.pendingSlotUnanswered ? { pendingSlotUnanswered: true } : {}),
@@ -1001,9 +1152,13 @@ export function deriveBeamSessionState(
   if ((refiningPresentedKit || downgradesKitToRecommendation) && mission?.intent === "recommendation") {
     mission = undefined;
   }
+  const statedFragrances = parseStatedFragrances(text);
+  const statedOnly = parseStatedOnly(text);
   const patch: BeamSessionState = {
     slots,
     ...(mission ? { mission } : {}),
+    ...(statedFragrances ? { statedFragrances } : {}),
+    ...(statedOnly ? { statedOnly: true } : {}),
     ...(isDelegationPhrase(text) ? { userDelegatedChoice: true } : {}),
     // Check satisfaction against the MERGED slots, not just this turn's parse — a
     // slot captured on a PRIOR turn is already answered, so re-marking it pending
@@ -1042,7 +1197,10 @@ export function beamSessionStatePrompt(state: BeamSessionState | undefined): str
   const safe = sanitizeBeamSessionState(state);
   const known = Object.entries(safe.slots).filter(([, value]) => Boolean(value));
   const mission = safe.mission;
-  if (known.length === 0 && !mission && !safe.userDelegatedChoice) return "";
+  const stated = safe.statedFragrances ?? [];
+  if (known.length === 0 && !mission && !safe.userDelegatedChoice && stated.length === 0 && !safe.statedOnly) {
+    return "";
+  }
 
   const lines = [
     "",
@@ -1062,6 +1220,22 @@ export function beamSessionStatePrompt(state: BeamSessionState | undefined): str
   if (safe.slots.budget && !/^no\s*limit$/i.test(safe.slots.budget)) {
     lines.push(
       `Budget constraint: ${safe.slots.budget}. Treat this as a ceiling — favor picks within it, and if you must mention something above it, flag that it's a splurge rather than presenting it as the obvious choice.`,
+    );
+  }
+  // The user LISTED what they have with them. That list — not the whole DB
+  // vault — is the candidate set for "what should I wear" picks. Names are
+  // dictated/typed, so the model must resolve each to the real fragrance
+  // (exact flanker) instead of trusting the spelling or a top-1 fuzzy hit.
+  if (stated.length > 0 && mission?.newness !== "new") {
+    lines.push(
+      `The user stated, in their own words, the fragrances they have available right now: ${stated
+        .map((name) => `"${name}"`)
+        .join(", ")}. These names are typed or voice-dictated and may be misspelled — resolve each to the real fragrance via beam_search_catalog and the vault, matching the exact flanker/edition the user named (never a same-brand sibling). When recommending what they should wear from what they have, choose ONLY from this stated list; do not substitute other vault bottles even if a vault-wide score ranks them higher.`,
+    );
+  }
+  if (safe.statedOnly) {
+    lines.push(
+      "HARD CONSTRAINT: the user explicitly told you to focus only on the fragrances they said they have. Re-read their messages, identify every fragrance THEY named, and recommend exclusively from those — never a different bottle from their vault or the catalog.",
     );
   }
   if (mission?.intent) {
