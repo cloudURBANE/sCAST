@@ -1157,8 +1157,8 @@ export const FragranceCapture: React.FC<{
   const chipClass = (active: boolean): string =>
     `inline-flex max-w-[11rem] items-center truncate rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 ${
       active
-        ? 'border-scent-accent/80 bg-scent-accent/15 text-[#fff7ec]'
-        : 'border-white/30 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
+        ? 'border-scent-accent/80 bg-scent-accent/15 text-foreground'
+        : 'border-white/30 text-scent-text-muted hover:border-scent-accent/45 hover:text-foreground'
     }`;
 
   const filtersActive = houseFilter !== null || genderFilter !== null;
@@ -1313,7 +1313,7 @@ export const FragranceCapture: React.FC<{
               fragrance, not the search prompt, is the page star. Floor lifted
               1.3→1.5rem so it reads elegantly at 320–390px; the 2.75rem ceiling
               (desktop) is unchanged. */}
-          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(1.5rem,4.4vw,2.75rem)] leading-[1.05] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)] sm:leading-[1.03]">
+          <h2 className="mx-auto max-w-[38rem] text-balance font-serif italic text-[clamp(1.5rem,4.4vw,2.75rem)] leading-[1.05] tracking-normal text-foreground drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)] sm:leading-[1.03]">
             Search any fragrance or brand.
           </h2>
         </header>
@@ -1372,7 +1372,7 @@ export const FragranceCapture: React.FC<{
               }}
               placeholder={searchFocused ? '' : isSmUp ? 'Search by house or fragrance...' : 'Search fragrances...'}
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input scent-vault-search-input relative z-0 h-[56px] w-full text-center font-sans text-base font-medium text-[#fff7ec] outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[64px] scroll-mt-28 px-16 sm:px-[4.35rem]"
+              className="scent-lux-input scent-vault-search-input relative z-0 h-[56px] w-full text-center font-sans text-base font-medium text-foreground outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[64px] scroll-mt-28 px-16 sm:px-[4.35rem]"
             />
             <m.button
               type="submit"
@@ -1380,7 +1380,7 @@ export const FragranceCapture: React.FC<{
               whileHover={uploading ? undefined : { scale: 1.06 }}
               whileTap={uploading ? undefined : { scale: 0.9 }}
               transition={{ type: "spring", stiffness: 520, damping: 22 }}
-              className="absolute right-3.5 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-scent-accent shadow-none outline-none transition-colors hover:text-[#fff7ec] focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:text-scent-accent"
+              className="absolute right-3.5 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-scent-accent shadow-none outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-scent-accent/35 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent disabled:pointer-events-none disabled:opacity-45 group-focus-within:text-scent-accent"
               aria-label="Search"
             >
               <m.span
@@ -1428,7 +1428,7 @@ export const FragranceCapture: React.FC<{
                     <button
                       type="button"
                       onClick={() => runRecoverySearch(sanitizedQuery)}
-                      className="inline-flex min-h-[44px] items-center rounded-full border border-scent-accent/45 bg-scent-accent/10 px-4 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/70 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                      className="inline-flex min-h-[44px] items-center rounded-full border border-scent-accent/45 bg-scent-accent/10 px-4 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
                     >
                       Remove symbols
                     </button>
@@ -1437,7 +1437,7 @@ export const FragranceCapture: React.FC<{
                     <button
                       type="button"
                       onClick={() => runRecoverySearch(brandOnlyQuery)}
-                      className="inline-flex min-h-[44px] items-center rounded-full border border-scent-accent/45 bg-scent-accent/10 px-4 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/70 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                      className="inline-flex min-h-[44px] items-center rounded-full border border-scent-accent/45 bg-scent-accent/10 px-4 py-1.5 scent-type-chip text-scent-accent transition-colors hover:border-scent-accent/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
                     >
                       Brand only
                     </button>
@@ -1601,7 +1601,7 @@ export const FragranceCapture: React.FC<{
                               <span className="flex min-w-0 flex-1 flex-col">
                                 <span className="flex min-w-0 items-center gap-1.5">
                                   <span
-                                    className="min-w-0 truncate font-serif text-[1.05rem] italic leading-tight text-[#fff7ec] sm:text-[1.2rem]"
+                                    className="min-w-0 truncate font-serif text-[1.05rem] italic leading-tight text-foreground sm:text-[1.2rem]"
                                     title={match.name}
                                   >
                                     {match.name}

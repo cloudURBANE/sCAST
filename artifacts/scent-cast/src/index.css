@@ -229,6 +229,34 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Quiet, accent-tinted scrollbars so long rails don't ship the chunky default
+ * OS bar against the near-black canvas. scrollbar-color inherits, so setting it
+ * on html covers every scroll container in both engines that honor it; the
+ * WebKit rules below cover Safari/Chrome. Component-scoped scrollbar overrides
+ * (e.g. .community-fragrance-detail__scroll) stay more specific and win.
+ * Tracks stay transparent and the thumb is a low-alpha accent pill — follows
+ * the active accent and both themes automatically via --scent-accent-rgb. */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--scent-accent-rgb) / 0.28) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  background-color: rgb(var(--scent-accent-rgb) / 0.26);
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(var(--scent-accent-rgb) / 0.42);
+}
+
 .scent-app-shell::before {
   content: "";
   position: fixed;
@@ -2606,7 +2634,7 @@ a {
   border-radius: inherit;
   background-color: transparent;
   pointer-events: none;
-  transition: background-color 150ms ease;
+  transition: background-color var(--scent-transition-fast) var(--scent-ease-out);
 }
 /* Hover brighten only for hover-capable pointers — on touch the veil stuck to
    every tapped button/badge until the next tap; :active feedback below covers

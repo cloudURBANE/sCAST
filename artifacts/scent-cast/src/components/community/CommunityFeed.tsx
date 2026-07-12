@@ -257,7 +257,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
             type="button"
             onClick={() => void fetchNextPage()}
             disabled={isFetchingNextPage}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 disabled:pointer-events-none disabled:opacity-55"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80 disabled:pointer-events-none disabled:opacity-55"
           >
             {isFetchingNextPage ? (
               <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
@@ -277,7 +277,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
               type="button"
               onClick={() => onStartRoom({ type: filters.type, tag: filters.tag })}
               aria-label={endCopy.ariaLabel}
-              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/22 bg-black/58 px-5 py-2 scent-type-chip text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
               <Plus size={15} strokeWidth={1.8} aria-hidden="true" />
               <span>{endCopy.label}</span>

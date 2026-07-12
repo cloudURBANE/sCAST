@@ -21,7 +21,7 @@ import {
 function renderSegments(segments: BeamInlineSegment[]): React.ReactNode {
   return segments.map((seg, i) =>
     seg.bold ? (
-      <strong key={i} className="font-semibold text-[#fff7ec]">
+      <strong key={i} className="font-semibold text-foreground">
         {seg.text}
       </strong>
     ) : (

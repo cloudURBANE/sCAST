@@ -169,7 +169,7 @@ const LiveClock: React.FC = React.memo(() => {
   return (
     <span
       key={display}
-      className="font-serif italic tracking-normal text-inherit leading-[1.05] text-[#fff7ec] tabular-nums"
+      className="font-serif italic tracking-normal text-inherit leading-[1.05] text-foreground tabular-nums"
       style={{ fontVariantNumeric: 'tabular-nums', display: 'inline-block', transform: 'translateZ(0)', willChange: 'transform' }}
     >
       {display}
@@ -663,13 +663,16 @@ function SignaturePanelFallback() {
 }
 
 function WardrobeFallback() {
+  // Mirrors the live vault grid (Wardrobe.tsx: grid-cols-1 gap-3 sm:grid-cols-2
+  // sm:gap-4 lg:gap-5 xl:grid-cols-4, tiles min-h-[26rem]) so the chunk swap
+  // doesn't jump columns or row heights when the real grid mounts.
   return (
-    <section className="mx-auto w-full max-w-[1400px] py-10" aria-label="Loading vault">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {[0, 1, 2].map((item) => (
+    <section className="w-full py-10" aria-label="Loading vault">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:gap-5 xl:grid-cols-4">
+        {[0, 1, 2, 3].map((item) => (
           <div
             key={item}
-            className="min-h-[24rem] rounded-[var(--radius-scent)] border border-scent-accent/12 bg-black/32"
+            className="min-h-[26rem] rounded-[var(--radius-scent)] border border-scent-accent/12 bg-black/32"
           />
         ))}
       </div>
@@ -1203,14 +1206,14 @@ function DashboardView() {
                       // tap from being read as a scroll-start during the busy
                       // close frame, so a single tap reliably triggers the exit.
                       style={{ touchAction: 'manipulation' }}
-                      className="absolute right-0 top-1/2 inline-flex min-h-11 -translate-y-1/2 items-center justify-center gap-1.5 rounded-full px-3 text-scent-text-subtle transition-colors duration-200 active:bg-white/10 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+                      className="absolute right-0 top-1/2 inline-flex min-h-11 -translate-y-1/2 items-center justify-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 text-scent-text-subtle transition-colors duration-200 active:bg-white/10 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
                       aria-label="Close and return to fragrance search"
                     >
                       <X size={18} strokeWidth={1.75} aria-hidden />
                       <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">Close</span>
                     </button>
                   </div>
-                  <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.4rem,3.4vw,1.9rem)] leading-[1.05] tracking-normal text-[#fff7ec] drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
+                  <h2 className="mx-auto max-w-[32rem] text-balance font-serif italic text-[clamp(1.4rem,3.4vw,1.9rem)] leading-[1.05] tracking-normal text-foreground drop-shadow-[0_4px_14px_rgba(0,0,0,0.72)]">
                     {missionStatus?.headerTitle ?? 'A scent for today.'}
                   </h2>
                   <p className="mt-1.5 scent-type-label text-scent-accent/55">
@@ -1465,7 +1468,12 @@ function DashboardView() {
                     <h3 className="font-serif italic text-3xl sm:text-8xl text-white leading-tight transition-transform group-hover:scale-105">{activeRecommendation.name}</h3>
                   </button>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 sm:gap-12 text-left">
-                    <div>
+                    {/* When Concentration is absent, Reason spans the full row so
+                        the two-column grid never opens with a hole at top-right;
+                        Confidence (always last) spans below for the same reason —
+                        the metric count is odd, so an un-spanned final cell left
+                        an orphan bottom-left on every sm+ viewport. */}
+                    <div className={activeRecommendation.concentration && activeRecommendation.concentration !== 'Unknown' ? undefined : 'sm:col-span-2'}>
                       <p className="mb-2 scent-type-label">Olfactory Reason</p>
                       <p className="text-base italic text-scent-text-muted leading-relaxed">{recommendationReason || 'Optimal olfactory alignment with your current atmospheric conditions.'}</p>
                     </div>
@@ -1506,7 +1514,7 @@ function DashboardView() {
                           <p className="mb-2 scent-type-label">Projection Risk</p>
                           <p className="text-base italic text-scent-text-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.projection_risk)}</p>
                         </div>
-                        <div>
+                        <div className="sm:col-span-2">
                           <p className="mb-2 scent-type-label">Confidence</p>
                           <p className="text-base italic text-scent-text-muted leading-relaxed">{titleCaseToken(activeEngineRecommendation.confidence)}</p>
                         </div>

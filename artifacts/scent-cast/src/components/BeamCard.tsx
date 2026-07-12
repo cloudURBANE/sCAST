@@ -246,7 +246,7 @@ function FragranceHeading({ fragrance }: { fragrance: BeamCardFragrance }): Reac
           {fragrance.brand}
         </p>
       ) : null}
-      <p className="break-words text-center font-serif italic text-xl leading-tight text-[#fff7ec]">
+      <p className="break-words text-center font-serif italic text-xl leading-tight text-foreground">
         {fragrance.name}
       </p>
       {fragrance.owned ? (
@@ -334,7 +334,7 @@ function CompareColumn({
       ) : null}
       {/* Two-line clamp instead of a hard truncate: niche names ("Ombré Leather
           Parfum") stay legible without letting one column stretch the row. */}
-      <p className="line-clamp-2 break-words font-serif italic text-[13px] leading-tight text-[#fff7ec] sm:text-[15px]">{fragrance.name}</p>
+      <p className="line-clamp-2 break-words font-serif italic text-[13px] leading-tight text-foreground sm:text-[15px]">{fragrance.name}</p>
       <p className="truncate scent-type-label text-[9px] text-scent-text-subtle">{fragrance.brand}</p>
       {fragrance.owned ? (
         <p className="mt-1 scent-type-label text-[9px] text-scent-accent">In your vault</p>
@@ -434,7 +434,7 @@ function TravelKitCard({
                     <CardPackshot imageUrl={pick.imageUrl} name={pick.name} brand={pick.brand} className="h-full w-full" />
                   </span>
                 ) : null}
-                <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-[#fff7ec]">{pick.name}</span>
+                <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-foreground">{pick.name}</span>
                 <span className="max-w-[45%] shrink-0 truncate scent-type-label text-[9px] text-scent-text-subtle">{pick.brand}</span>
               </li>
             ))}
@@ -456,14 +456,14 @@ function TravelKitCard({
                     <CardPackshot imageUrl={pick.imageUrl} name={pick.name} brand={pick.brand} className="h-full w-full" />
                   </span>
                 ) : null}
-                <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-[#fff7ec]">{pick.name}</span>
+                <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-foreground">{pick.name}</span>
                 <span className="max-w-[35%] shrink-0 truncate scent-type-label text-[9px] text-scent-text-subtle">{pick.brand}</span>
                 {onViewItem ? (
                   <button
                     type="button"
                     onClick={() => onViewItem(pick)}
                     aria-label={`View details for ${pick.name}`}
-                    className="-my-1 inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full px-2 py-1 scent-type-label text-[10px] text-scent-accent transition-colors hover:text-[#fff7ec]"
+                    className="-my-1 inline-flex min-h-9 shrink-0 items-center gap-1 rounded-full px-2 py-1 scent-type-label text-[10px] text-scent-accent transition-colors hover:text-foreground"
                   >
                     <Eye size={13} aria-hidden />
                     <span>View</span>
@@ -484,7 +484,7 @@ function TravelKitCard({
                   type="button"
                   onClick={() => onAddNewPicks(card.newPicks, card.proposalId)}
                   disabled={adding}
-                  className="inline-flex min-h-11 max-w-full items-center justify-center gap-1.5 rounded-full border border-scent-accent/42 px-4 py-2 text-center scent-type-chip text-[11px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12 disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex min-h-11 max-w-full items-center justify-center gap-1.5 rounded-full border border-scent-accent/42 px-4 py-2 text-center scent-type-chip text-[11px] text-foreground transition-colors hover:bg-scent-accent/12 disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   <Plus size={14} aria-hidden className="shrink-0" />
                   <span className="min-w-0 break-words">

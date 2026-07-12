@@ -98,7 +98,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 <p className="text-[10px] uppercase tracking-[0.4em] text-red-400/80 font-bold">
                   System Disruption
                 </p>
-                <h1 className="font-serif italic text-3xl sm:text-4xl text-[#fff7ec] tracking-tight leading-tight">
+                <h1 className="font-serif italic text-3xl sm:text-4xl text-foreground tracking-tight leading-tight">
                   Olfactory Feed Interrupted
                 </h1>
                 <p className="text-sm text-white/55 max-w-sm mx-auto leading-relaxed">

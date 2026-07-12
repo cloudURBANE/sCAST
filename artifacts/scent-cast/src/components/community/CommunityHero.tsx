@@ -18,7 +18,7 @@ export const CommunityHero: React.FC = () => (
 
     {/* Page title: the only h1 on the desktop document (the top-nav brand h1 is
         md:hidden), matching the legal / not-found / arena page-title pattern. */}
-    <h1 className="mx-auto mt-2.5 max-w-[19rem] text-balance font-serif text-[clamp(1.4rem,6.5vw,1.75rem)] leading-none tracking-normal text-[#fff7ec] sm:mt-4 sm:max-w-[52rem] sm:text-[clamp(2.5rem,5.4vw,4.35rem)] sm:leading-[1.02]">
+    <h1 className="mx-auto mt-2.5 max-w-[19rem] text-balance font-serif text-[clamp(1.4rem,6.5vw,1.75rem)] leading-none tracking-normal text-foreground sm:mt-4 sm:max-w-[52rem] sm:text-[clamp(2.5rem,5.4vw,4.35rem)] sm:leading-[1.02]">
       See what the <span className="italic text-scent-accent">community</span> is wearing.
     </h1>
 

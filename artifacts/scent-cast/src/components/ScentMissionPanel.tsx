@@ -314,7 +314,7 @@ const AnswerFeedbackControl: React.FC<{
             type="button"
             disabled={submitting}
             onClick={() => onPick(reason.code)}
-            className="min-h-10 rounded-full border border-scent-accent/18 px-3 py-1.5 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/40 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
+            className="min-h-10 rounded-full border border-scent-accent/18 px-3 py-1.5 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:opacity-45"
           >
             {reason.label}
           </button>
@@ -491,7 +491,7 @@ const BeamActivityStepRow: React.FC<{ step: BeamActivityStep; spin: boolean }> =
     <span className="min-w-0 flex-1 leading-snug">
       <span
         className={`text-[12px] ${
-          step.state === 'active' ? 'text-[#fff7ec]' : 'text-scent-text-muted'
+          step.state === 'active' ? 'text-foreground' : 'text-scent-text-muted'
         }`}
       >
         {/* Drop the trailing "…" once the step has settled — an ellipsis next to a
@@ -580,7 +580,7 @@ const BeamActivityTrail: React.FC<{
             <Check size={13} className="text-scent-accent" aria-hidden />
           )}
         </span>
-        <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium leading-snug text-[#fff7ec]">
+        <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium leading-snug text-foreground">
           {summaryLabel}
         </span>
         <button
@@ -1091,7 +1091,7 @@ function MissionMessageRowComponent({
       }}
       className={`relative max-w-[92%] min-w-0 break-words [overflow-wrap:anywhere] rounded-[calc(var(--radius-scent)-10px)] border px-3.5 py-2.5 text-[13px] leading-relaxed shadow-[inset_0_1px_0_rgba(255,236,183,0.04),0_10px_24px_rgba(0,0,0,0.2)] sm:text-sm ${
         message.role === 'user'
-          ? 'self-end border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,247,236,0.082),rgba(58,45,30,0.16))] text-[#fff7ec]'
+          ? 'self-end border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,247,236,0.082),rgba(58,45,30,0.16))] text-foreground'
           : message.role === 'system'
             ? 'self-start border-red-400/25 bg-red-500/10 text-red-100'
             : 'self-start border-scent-accent/18 bg-[linear-gradient(180deg,rgba(255,236,183,0.052),rgba(212,175,55,0.025)_42%,rgba(0,0,0,0.22))] text-scent-text-muted'
@@ -2606,7 +2606,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
           placeholder={busy ? 'Composing your recommendation…' : composerFocused ? '' : composerPlaceholder}
           aria-label="Message the Beam Agent"
           autoComplete="off"
-          className={`min-w-0 flex-1 bg-transparent px-1 ${composer ? 'text-left' : 'text-center'} text-[16px] font-medium tracking-[0.015em] text-[#fff7ec] caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-[#d8c9b5]/55`}
+          className={`min-w-0 flex-1 bg-transparent px-1 ${composer ? 'text-left' : 'text-center'} text-[16px] font-medium tracking-[0.015em] text-foreground caret-[#f5bd69] outline-none placeholder:text-[#d8c9b5]/72 disabled:cursor-not-allowed disabled:placeholder:text-[#d8c9b5]/55`}
         />
         {busy ? (
           // While a turn runs the slot becomes a live Stop control (the standard
@@ -2657,8 +2657,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                         aria-pressed={selected}
                         className={`inline-flex min-h-10 items-center gap-1.5 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
                           selected
-                            ? 'border-scent-accent/78 bg-scent-accent/13 text-[#fff7ec]'
-                            : 'border-white/20 text-scent-text-muted hover:border-scent-accent/45 hover:text-[#fff7ec]'
+                            ? 'border-scent-accent/78 bg-scent-accent/13 text-foreground'
+                            : 'border-white/20 text-scent-text-muted hover:border-scent-accent/45 hover:text-foreground'
                         }`}
                       >
                         <Icon size={12} strokeWidth={2} aria-hidden />
@@ -2681,8 +2681,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                         aria-pressed={selected}
                         className={`min-h-10 rounded-full border px-3 py-1.5 scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 ${
                           selected
-                            ? 'border-scent-accent/70 text-[#fff7ec]'
-                            : 'border-white/18 text-scent-text-muted hover:border-scent-accent/42 hover:text-[#fff7ec]'
+                            ? 'border-scent-accent/70 text-foreground'
+                            : 'border-white/18 text-scent-text-muted hover:border-scent-accent/42 hover:text-foreground'
                         }`}
                       >
                         {label}
@@ -2958,7 +2958,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                 type="button"
                 onClick={flowState === 'error' && !catalogFailure ? retryCatalog : recommendNow}
                 disabled={busy || recommendCta.disabled}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/42 px-5 py-2.5 text-[12px] font-semibold text-[#fff7ec] transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-scent-accent/42 px-5 py-2.5 text-[12px] font-semibold text-foreground transition-colors hover:bg-scent-accent/10 disabled:opacity-45"
               >
                 {recommendCta.disabled ? (
                   <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -3072,7 +3072,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                   setPendingCueFacet(null);
                 }}
                 disabled={busy}
-                className="inline-flex min-h-10 items-center justify-center rounded-full border border-white/20 px-4 py-1.5 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-[#fff7ec] disabled:opacity-45"
+                className="inline-flex min-h-10 items-center justify-center rounded-full border border-white/20 px-4 py-1.5 scent-type-chip text-[11px] text-scent-text-muted transition-colors hover:border-scent-accent/42 hover:text-foreground disabled:opacity-45"
               >
                 <span>Cancel</span>
               </button>
@@ -3294,7 +3294,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                   {proposalReveal.fragrance.brand}
                 </m.p>
               ) : null}
-              <m.p variants={revealItem} className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
+              <m.p variants={revealItem} className="font-serif italic text-2xl leading-tight text-foreground">
                 {proposalReveal.fragrance.name}
               </m.p>
               <m.p variants={revealItem} className="mt-2 text-sm italic leading-relaxed text-scent-text-muted">
@@ -3316,7 +3316,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                     type="button"
                     onClick={() => handleViewProposalItem(proposal.items[0])}
                     aria-label={`View details for ${proposalReveal.fragrance.name}`}
-                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] border border-scent-accent/42 px-4 py-2.5 scent-type-chip text-[12px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12"
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[var(--radius-scent)] border border-scent-accent/42 px-4 py-2.5 scent-type-chip text-[12px] text-foreground transition-colors hover:bg-scent-accent/12"
                   >
                     <Eye size={14} aria-hidden />
                     <span>View</span>
@@ -3331,14 +3331,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                   <ul className="mt-1.5 flex flex-col gap-1.5">
                     {proposal.items.slice(1, 4).map((item, index) => (
                       <li key={`${item.brand}-${item.name}-${index}`} className="flex min-w-0 items-baseline justify-between gap-3">
-                        <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-[#fff7ec] sm:text-sm">{item.name}</span>
+                        <span className="min-w-0 flex-1 truncate font-serif italic text-[13px] text-foreground sm:text-sm">{item.name}</span>
                         <span className="scent-type-label shrink-0 text-scent-text-subtle">{item.brand}</span>
                         {onViewProposalItem ? (
                           <button
                             type="button"
                             onClick={() => handleViewProposalItem(item)}
                             aria-label={`View details for ${item.name}`}
-                            className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 scent-type-label text-scent-accent transition-colors hover:text-[#fff7ec]"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 scent-type-label text-scent-accent transition-colors hover:text-foreground"
                           >
                             <Eye size={13} aria-hidden />
                             <span>View</span>
@@ -3360,14 +3360,14 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                   type="button"
                   onClick={() => void handleConfirmProposal()}
                   disabled={!onCurateCollection}
-                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-scent-accent/42 px-4 py-1.5 scent-type-chip text-[11px] text-[#fff7ec] transition-colors hover:bg-scent-accent/12 disabled:opacity-55"
+                  className="inline-flex min-h-10 items-center justify-center rounded-full border border-scent-accent/42 px-4 py-1.5 scent-type-chip text-[11px] text-foreground transition-colors hover:bg-scent-accent/12 disabled:opacity-55"
                 >
                   {proposal.items.length > 1 ? `Add ${proposal.items.length} to vault` : 'Add to vault'}
                 </button>
                 <button
                   type="button"
                   onClick={handleDeclineProposal}
-                  className="inline-flex min-h-10 items-center justify-center px-2 py-1.5 scent-type-chip text-[11px] text-scent-text-subtle transition-colors hover:text-[#fff7ec]"
+                  className="inline-flex min-h-10 items-center justify-center px-2 py-1.5 scent-type-chip text-[11px] text-scent-text-subtle transition-colors hover:text-foreground"
                 >
                   Not now
                 </button>
@@ -3426,7 +3426,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
                   {resolved.recommendation.brand}
                 </m.p>
               ) : null}
-              <m.p variants={revealItem} className="font-serif italic text-2xl leading-tight text-[#fff7ec]">
+              <m.p variants={revealItem} className="font-serif italic text-2xl leading-tight text-foreground">
                 {resolved.recommendation.name}
               </m.p>
               <m.p variants={revealItem} className="mt-2 text-sm italic leading-relaxed text-scent-text-muted">

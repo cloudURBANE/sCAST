@@ -47,8 +47,8 @@ function roomButtonClass(active: boolean, extra = '') {
   return [
     'group flex min-h-12 items-center justify-center gap-2.5 rounded-full border px-3 py-2 text-center scent-type-chip transition-[color,background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
-      ? 'border-scent-accent/70 bg-scent-accent/[0.18] font-bold text-[#fff7ec] shadow-[inset_0_1px_0_rgba(255,244,210,0.14)]'
-      : 'border-scent-accent/14 bg-black/30 text-scent-text-muted hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] hover:text-[#fff7ec]',
+      ? 'border-scent-accent/70 bg-scent-accent/[0.18] font-bold text-foreground shadow-[inset_0_1px_0_rgba(255,244,210,0.14)]'
+      : 'border-scent-accent/14 bg-black/30 text-scent-text-muted hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] hover:text-foreground',
     extra,
   ]
     .filter(Boolean)
@@ -60,8 +60,8 @@ function roomMenuItemClass(active: boolean) {
   return [
     'flex min-h-11 w-full items-center gap-2.5 rounded-[12px] border px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.12em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
-      ? 'border-scent-accent/55 bg-scent-accent/[0.16] text-[#fff7ec]'
-      : 'border-scent-accent/14 bg-black/30 text-scent-text-muted hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] hover:text-[#fff7ec]',
+      ? 'border-scent-accent/55 bg-scent-accent/[0.16] text-foreground'
+      : 'border-scent-accent/14 bg-black/30 text-scent-text-muted hover:border-scent-accent/42 hover:bg-scent-accent/[0.055] hover:text-foreground',
   ].join(' ');
 }
 
@@ -69,8 +69,8 @@ function tagButtonClass(active: boolean) {
   return [
     'inline-flex h-10 min-w-max items-center justify-center rounded-full border px-3 text-center text-xs font-bold uppercase tracking-[0.12em] transition-[color,background-color,border-color,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80',
     active
-      ? 'border-scent-accent/76 bg-scent-accent/[0.18] text-[#fff7ec] shadow-[inset_0_1px_0_rgba(255,244,210,0.14)]'
-      : 'border-scent-accent/16 bg-black/30 text-[#d9c099] hover:border-scent-accent/46 hover:bg-scent-accent/[0.065] hover:text-[#fff7ec]',
+      ? 'border-scent-accent/76 bg-scent-accent/[0.18] text-foreground shadow-[inset_0_1px_0_rgba(255,244,210,0.14)]'
+      : 'border-scent-accent/16 bg-black/30 text-[#d9c099] hover:border-scent-accent/46 hover:bg-scent-accent/[0.065] hover:text-foreground',
   ].join(' ');
 }
 
@@ -261,14 +261,14 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
             aria-label="Search community rooms"
             // text-ellipsis so the long placeholder resolves with an ellipsis on
             // narrow phones instead of clipping mid-word at the input edge.
-            className="scent-lux-input h-[3.25rem] w-full text-ellipsis rounded-full px-14 text-center text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+            className="scent-lux-input h-[3.25rem] w-full text-ellipsis rounded-full px-14 text-center text-base text-foreground placeholder:text-scent-text-subtle"
           />
           {draftQuery ? (
             <button
               type="button"
               onClick={() => setDraftQuery('')}
               aria-label="Clear search"
-              className="absolute right-1.5 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+              className="absolute right-1.5 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-scent-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
               <X size={15} strokeWidth={1.8} aria-hidden="true" />
             </button>
@@ -317,7 +317,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
             <span className="min-w-0 overflow-hidden">
               <span className="block scent-type-label text-scent-accent">Popular tags</span>
               {tag ? (
-                <span className="mt-0.5 block truncate text-xs font-bold uppercase tracking-[0.12em] text-[#fff7ec]">
+                <span className="mt-0.5 block truncate text-xs font-bold uppercase tracking-[0.12em] text-foreground">
                   #{tag}
                 </span>
               ) : null}
@@ -350,7 +350,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               aria-haspopup="listbox"
               className="flex h-11 w-full min-w-0 items-center justify-between gap-1.5 rounded-full border border-scent-accent/24 bg-black/40 px-3 text-left transition-colors hover:border-scent-accent/46 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
-              <span className="flex min-w-0 items-center gap-1.5 text-[#fff7ec]">
+              <span className="flex min-w-0 items-center gap-1.5 text-foreground">
                 <ActiveRoomIcon size={16} strokeWidth={1.65} className="shrink-0 text-scent-accent" aria-hidden="true" />
                 {/* Compact resting label: "All rooms"/"Popular tags" overflowed
                     the half-width pills and rendered as "ALL RO…" even at rest
@@ -377,7 +377,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
               aria-haspopup="listbox"
               className="flex h-11 w-full min-w-0 items-center justify-between gap-1.5 rounded-full border border-scent-accent/24 bg-black/40 px-3 text-left transition-colors hover:border-scent-accent/46 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
-              <span className="truncate text-xs font-bold uppercase tracking-[0.12em] text-[#fff7ec]">
+              <span className="truncate text-xs font-bold uppercase tracking-[0.12em] text-foreground">
                 {tag ? `#${tag}` : 'Tags'}
               </span>
               <ChevronDown
@@ -456,7 +456,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
             <button
               type="button"
               onClick={clearFilters}
-              className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 py-2 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
+              className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-full px-3 py-2 scent-type-chip text-scent-text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/80"
             >
               <X size={13} strokeWidth={1.8} aria-hidden="true" />
               Clear

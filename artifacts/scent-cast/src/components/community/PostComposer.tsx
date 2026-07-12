@@ -313,14 +313,14 @@ const BattleFragrancePicker: React.FC<BattleFragrancePickerProps> = ({
         placeholder="Search your wardrobe and catalog"
         aria-label={label}
         aria-autocomplete="list"
-        className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] pl-11 pr-12 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+        className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] pl-11 pr-12 text-base text-foreground placeholder:text-scent-text-subtle"
       />
       {selected ? (
         <button
           type="button"
           onClick={onClear}
           aria-label={`Clear ${label}`}
-          className="absolute right-2 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+          className="absolute right-2 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-scent-text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
         >
           <X size={14} strokeWidth={1.8} aria-hidden="true" />
         </button>
@@ -337,7 +337,7 @@ const BattleFragrancePicker: React.FC<BattleFragrancePickerProps> = ({
       <div className="mt-2 flex items-center gap-2 rounded-[14px] border border-scent-accent/18 bg-scent-accent/[0.06] px-3 py-2 text-left">
         <Check size={15} className="shrink-0 text-scent-accent" aria-hidden="true" />
         <span className="min-w-0">
-          <span className="block truncate font-serif text-base italic text-[#fff7ec]">{selected.name}</span>
+          <span className="block truncate font-serif text-base italic text-foreground">{selected.name}</span>
           <span className="block truncate scent-type-label text-scent-accent/82">{selected.brand}</span>
         </span>
       </div>
@@ -354,7 +354,7 @@ const BattleFragrancePicker: React.FC<BattleFragrancePickerProps> = ({
             className="grid w-full grid-cols-[1fr_auto] items-center gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors hover:bg-scent-accent/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55"
           >
             <span className="min-w-0">
-              <span className="block truncate font-serif text-base italic text-[#fff7ec]">{candidate.name}</span>
+              <span className="block truncate font-serif text-base italic text-foreground">{candidate.name}</span>
               <span className="mt-1 block truncate scent-type-label text-scent-accent/82">{candidate.brand}</span>
             </span>
             <span className="rounded-full border border-scent-accent/18 px-2 py-1 scent-type-meta uppercase text-scent-text-muted">
@@ -910,7 +910,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             heading + room hint are the only contextual cue for the open editor,
             so the surface never reads as duplicate controls. */}
         <div className="flex flex-col items-center gap-2 px-2 text-center">
-          <h2 className="font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl">
+          <h2 className="font-serif text-2xl italic leading-tight text-foreground sm:text-3xl">
             Start a room
           </h2>
           <p className="mx-auto max-w-xl text-sm leading-6 text-scent-text-muted sm:text-base sm:leading-7">
@@ -938,8 +938,8 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               className={[
                 'inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-full border px-3 py-2 text-center scent-type-chip transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35',
                 postType === type
-                  ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-[#fff7ec]'
-                  : 'border-scent-accent/16 bg-black/54 text-scent-text-muted hover:border-scent-accent/34 hover:text-[#fff7ec]',
+                  ? 'border-scent-accent/48 bg-scent-accent/[0.08] text-foreground'
+                  : 'border-scent-accent/16 bg-black/54 text-scent-text-muted hover:border-scent-accent/34 hover:text-foreground',
               ].join(' ')}
             >
               <Icon size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -957,7 +957,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             maxLength={140}
             placeholder="Optional room title"
             aria-label="Room name"
-            className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+            className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-base text-foreground placeholder:text-scent-text-subtle"
           />
           <input
             type="text"
@@ -967,7 +967,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             onBlur={() => addTagsFromInput(tagInput)}
             placeholder="Optional tags, comma separated"
             aria-label="Room tags"
-            className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+            className="scent-lux-input h-12 w-full rounded-[var(--radius-scent)] px-4 text-base text-foreground placeholder:text-scent-text-subtle"
           />
         </div>
 
@@ -979,7 +979,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                 type="button"
                 onClick={() => setTags((current) => current.filter((item) => item !== tag))}
                 aria-label={`Remove tag ${tag}`}
-                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/54 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/54 px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
               >
                 #{tag}
                 <X size={12} strokeWidth={1.8} aria-hidden="true" />
@@ -998,7 +998,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               maxLength={80}
               placeholder="Weather (optional)"
               aria-label="Weather"
-              className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+              className="scent-lux-input h-11 rounded-full px-4 text-base text-foreground placeholder:text-scent-text-subtle"
             />
             <input
               type="text"
@@ -1007,7 +1007,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               maxLength={80}
               placeholder="Occasion (optional)"
               aria-label="Occasion"
-              className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+              className="scent-lux-input h-11 rounded-full px-4 text-base text-foreground placeholder:text-scent-text-subtle"
             />
             <input
               type="text"
@@ -1016,7 +1016,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               maxLength={80}
               placeholder="Mood (optional)"
               aria-label="Mood"
-              className="scent-lux-input h-11 rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+              className="scent-lux-input h-11 rounded-full px-4 text-base text-foreground placeholder:text-scent-text-subtle"
             />
           </div>
         ) : null}
@@ -1066,7 +1066,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             maxLength={120}
             placeholder="Price context (optional)"
             aria-label="Price context"
-            className="scent-lux-input h-11 w-full rounded-full px-4 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+            className="scent-lux-input h-11 w-full rounded-full px-4 text-base text-foreground placeholder:text-scent-text-subtle"
           />
         ) : null}
 
@@ -1085,7 +1085,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
             maxLength={MAX_BODY_LENGTH}
             placeholder={bodyPlaceholder}
             aria-label="Room discussion"
-            className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
+            className="scent-lux-input min-h-40 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-foreground placeholder:text-scent-text-subtle"
           />
           {/* Live character count sits directly under the textarea, right-aligned. */}
           <p className={`mt-1.5 text-right scent-type-meta uppercase ${bodyNearLimit ? 'text-scent-accent' : 'text-scent-text-subtle'}`}>
@@ -1115,7 +1115,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
               placeholder="Attach a fragrance"
               aria-label="Search fragrance to attach"
               aria-autocomplete="list"
-              className="scent-lux-input h-11 w-full rounded-full pl-11 pr-11 text-base text-[#fff7ec] placeholder:text-scent-text-subtle"
+              className="scent-lux-input h-11 w-full rounded-full pl-11 pr-11 text-base text-foreground placeholder:text-scent-text-subtle"
             />
             {searchingFragrance ? (
               <LoaderCircle
@@ -1140,7 +1140,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                     className="grid min-h-16 grid-cols-[1fr_auto] items-center gap-3 rounded-[14px] border border-white/10 bg-black/62 px-4 py-3 text-left transition-colors hover:border-scent-accent/28 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-55"
                   >
                     <span className="min-w-0">
-                      <span className="block truncate font-serif text-base italic text-[#fff7ec]">
+                      <span className="block truncate font-serif text-base italic text-foreground">
                         {result.name}
                       </span>
                       <span className="mt-1 block truncate scent-type-label text-scent-accent">
@@ -1177,7 +1177,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                     />
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-serif text-base italic leading-tight text-[#fff7ec]">
+                    <p className="truncate font-serif text-base italic leading-tight text-foreground">
                       {fragrance.name}
                     </p>
                     <p className="mt-1 truncate scent-type-label text-scent-accent">
@@ -1188,7 +1188,7 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
                     type="button"
                     onClick={() => removeFragrance(fragrance)}
                     aria-label={`Remove ${fragrance.name}`}
-                    className="inline-flex h-11 w-11 items-center justify-center rounded-full text-scent-text-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
+                    className="inline-flex h-11 w-11 items-center justify-center rounded-full text-scent-text-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35"
                   >
                     <X size={14} strokeWidth={1.8} aria-hidden="true" />
                   </button>

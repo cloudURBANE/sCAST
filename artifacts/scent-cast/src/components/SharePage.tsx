@@ -778,7 +778,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     hero stays legible now that the page floor is always dark;
                     `text-foreground` would flip to dark ink under light theme
                     and vanish against the dark base. */}
-                <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-[#fff7ec] tracking-normal leading-none">Vault of Aromas</h2>
+                <h2 className="font-serif italic text-[clamp(2.65rem,8vw,5.35rem)] text-foreground tracking-normal leading-none">Vault of Aromas</h2>
               </div>
               <VaultGridModeToggle
                 mode={gridMode}
@@ -938,7 +938,7 @@ export const SharePage: React.FC<{ userId: string }> = ({ userId }) => {
                     <div className="order-2 sm:order-1 sm:col-start-1 sm:row-start-1 space-y-2">
                       <h2
                         id="share-fragrance-detail-title"
-                        className="font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase"
+                        className="font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-foreground tracking-normal uppercase"
                       >
                         {entryName(selectedItem)}
                       </h2>

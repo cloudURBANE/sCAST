@@ -117,10 +117,10 @@ const FragranceShowcase: React.FC<{ post: CommunityPost }> = ({ post }) => {
             aria-hidden="true"
           />
           <div className="flex min-w-0 flex-col justify-center border-l border-scent-accent/16 p-3 text-left sm:border-l-0 sm:border-t-0 sm:p-7">
-            <p className="break-words font-serif text-base italic leading-tight text-[#fff7ec] sm:text-3xl">
+            <p className="break-words font-serif text-base italic leading-tight text-foreground sm:text-3xl">
               {fragrance.name}
             </p>
-            <p className="mt-1.5 break-words text-xs font-black uppercase leading-tight tracking-[0.1em] text-[#fff7ec] sm:mt-4 sm:text-3xl sm:tracking-[0.12em]">
+            <p className="mt-1.5 break-words text-xs font-black uppercase leading-tight tracking-[0.1em] text-foreground sm:mt-4 sm:text-3xl sm:tracking-[0.12em]">
               {fragrance.brand}
             </p>
             <div
@@ -171,7 +171,7 @@ const PostActionsFooter: React.FC<{
     <button
       type="button"
       onClick={onToggleComments}
-      className="scent-no-mobile-focus-ring flex min-h-9 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
+      className="scent-no-mobile-focus-ring flex min-h-9 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 scent-type-chip text-scent-text-muted transition-colors hover:bg-white/[0.045] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
       aria-expanded={commentsOpen}
       aria-label={
         commentsOpen
@@ -236,7 +236,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
           <div className="min-w-0">
             <Link
               to={communitySharePath(post.author)}
-              className="block min-w-0 max-w-full truncate scent-type-chip text-xs text-[#fff7ec] transition-colors hover:text-scent-accent sm:text-sm"
+              className="block min-w-0 max-w-full truncate scent-type-chip text-xs text-foreground transition-colors hover:text-scent-accent sm:text-sm"
             >
               {authorName}
             </Link>
@@ -259,7 +259,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         {title ? (
           <h3
             id={headingId}
-            className="break-words text-balance font-serif text-xl italic leading-[1.08] text-[#fff7ec] sm:text-3xl"
+            className="break-words text-balance font-serif text-xl italic leading-[1.08] text-foreground sm:text-3xl"
           >
             {title}
           </h3>
@@ -268,8 +268,8 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
           <p
             className={
               title
-                ? 'mt-1.5 line-clamp-2 whitespace-pre-line break-words text-xs leading-4 text-[#fff7ec]/68 sm:mt-2 sm:text-base sm:leading-6'
-                : 'line-clamp-2 whitespace-pre-line break-words text-sm leading-5 text-[#fff7ec]/86 sm:text-lg sm:leading-7'
+                ? 'mt-1.5 line-clamp-2 whitespace-pre-line break-words text-xs leading-4 text-foreground/68 sm:mt-2 sm:text-base sm:leading-6'
+                : 'line-clamp-2 whitespace-pre-line break-words text-sm leading-5 text-foreground/86 sm:text-lg sm:leading-7'
             }
           >
             {post.body}
@@ -289,7 +289,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
             return (
               <div key={option} className="min-w-0">
                 <div className="flex items-baseline justify-between gap-3">
-                  <p className="flex min-w-0 items-center gap-1.5 font-serif text-base italic leading-tight text-[#fff7ec] sm:text-lg">
+                  <p className="flex min-w-0 items-center gap-1.5 font-serif text-base italic leading-tight text-foreground sm:text-lg">
                     <span className="min-w-0 truncate" title={option}>
                       {option}
                     </span>
@@ -348,7 +348,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         </div>
         <Link
           to="/arena"
-          className="scent-no-mobile-focus-ring inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/55 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-scent-accent transition-colors hover:border-scent-accent/80 hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-10 sm:px-5 sm:py-2 sm:text-xs"
+          className="scent-no-mobile-focus-ring inline-flex min-h-9 shrink-0 items-center justify-center gap-1.5 rounded-full border border-scent-accent/55 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-scent-accent transition-colors hover:border-scent-accent/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:min-h-10 sm:px-5 sm:py-2 sm:text-xs"
         >
           <span>Open arena</span>
           <ArrowRight size={14} strokeWidth={1.8} aria-hidden="true" />
@@ -389,7 +389,7 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
           <div className="min-w-0">
             <Link
               to={communitySharePath(post.author)}
-              className="block min-w-0 max-w-full truncate scent-type-chip text-[12px] text-[#fff7ec] transition-colors hover:text-scent-accent"
+              className="block min-w-0 max-w-full truncate scent-type-chip text-[12px] text-foreground transition-colors hover:text-scent-accent"
             >
               {authorName}
             </Link>
@@ -408,7 +408,7 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
         {title ? (
           <h3
             id={headingId}
-            className="break-words text-balance font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-3xl"
+            className="break-words text-balance font-serif text-2xl italic leading-tight text-foreground sm:text-3xl"
           >
             {title}
           </h3>
@@ -417,8 +417,8 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
           <p
             className={
               title
-                ? 'mt-2 max-w-2xl whitespace-pre-line break-words text-sm leading-6 text-[#fff7ec]/76 sm:text-[15px]'
-                : 'max-w-2xl whitespace-pre-line break-words text-[15px] leading-6 text-[#fff7ec]/90 sm:text-base sm:leading-7'
+                ? 'mt-2 max-w-2xl whitespace-pre-line break-words text-sm leading-6 text-foreground/76 sm:text-[15px]'
+                : 'max-w-2xl whitespace-pre-line break-words text-[15px] leading-6 text-foreground/90 sm:text-base sm:leading-7'
             }
           >
             {post.body}
@@ -477,7 +477,7 @@ const MetadataLine: React.FC<{ post: CommunityPost }> = ({ post }) => {
             <span className="font-bold uppercase tracking-[0.12em] text-scent-accent">
               {label}
             </span>
-            <span className="ml-2 text-[#fff7ec]/78">{value}</span>
+            <span className="ml-2 text-foreground/78">{value}</span>
           </span>
         ))}
       </div>
@@ -490,7 +490,7 @@ const MetadataLine: React.FC<{ post: CommunityPost }> = ({ post }) => {
       metadataString(post, 'priceContext');
     if (!priceContext) return null;
     return (
-      <p className="mt-5 max-w-2xl rounded-[16px] border border-scent-accent/18 bg-black/62 px-4 py-3 text-left text-sm leading-6 text-[#fff7ec]/82">
+      <p className="mt-5 max-w-2xl rounded-[16px] border border-scent-accent/18 bg-black/62 px-4 py-3 text-left text-sm leading-6 text-foreground/82">
         <span className="font-bold uppercase tracking-[0.14em] text-scent-accent">
           Price context
         </span>
@@ -591,7 +591,7 @@ const BattleVotes: React.FC<{
             />
             <span className="relative z-10 flex items-center justify-between gap-4">
               <span className="flex min-w-0 items-center gap-2">
-                <span className="min-w-0 truncate font-serif text-lg italic text-[#fff7ec]">
+                <span className="min-w-0 truncate font-serif text-lg italic text-foreground">
                   {option}
                 </span>
                 {picked ? (
@@ -691,7 +691,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
           <div className="min-w-0">
             <Link
               to={communitySharePath(post.author)}
-              className="block min-w-0 max-w-full truncate scent-type-chip text-[12px] text-[#fff7ec] transition-colors hover:text-scent-accent"
+              className="block min-w-0 max-w-full truncate scent-type-chip text-[12px] text-foreground transition-colors hover:text-scent-accent"
             >
               {authorName}
             </Link>
@@ -727,7 +727,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
                 <Sparkles size={12} strokeWidth={1.8} aria-hidden="true" />
                 Today
               </span>
-              <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 font-mono text-[10px] uppercase text-[#fff7ec]/52">
+              <span className="rounded-full border border-white/10 bg-white/[0.035] px-2.5 py-1 font-mono text-[10px] uppercase text-foreground/52">
                 Beam
               </span>
             </div>
@@ -772,7 +772,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
           </p>
           <h3
             id={headingId}
-            className="mt-1.5 break-words text-balance font-serif text-2xl italic leading-[0.98] text-[#fff7ec] sm:mt-2 sm:text-5xl"
+            className="mt-1.5 break-words text-balance font-serif text-2xl italic leading-[0.98] text-foreground sm:mt-2 sm:text-5xl"
           >
             {heading}
           </h3>
@@ -782,7 +782,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
             className="mt-2 font-serif text-sm uppercase tracking-[0.14em] sm:mt-3 sm:text-xl sm:tracking-[0.18em]"
           />
           {fragrance?.family ? (
-            <p className="mt-2 max-w-lg text-xs leading-4 text-[#fff7ec]/68 sm:mt-4 sm:text-sm sm:leading-6">
+            <p className="mt-2 max-w-lg text-xs leading-4 text-foreground/68 sm:mt-4 sm:text-sm sm:leading-6">
               {fragrance.family}
             </p>
           ) : null}
@@ -849,7 +849,7 @@ const StandardPostCard: React.FC<PostCardProps> = ({
           <div className="min-w-0">
             <Link
               to={communitySharePath(post.author)}
-              className="block min-w-0 max-w-full truncate scent-type-chip text-base text-[#fff7ec] transition-colors hover:text-scent-accent"
+              className="block min-w-0 max-w-full truncate scent-type-chip text-base text-foreground transition-colors hover:text-scent-accent"
             >
               {authorName}
             </Link>
@@ -872,7 +872,7 @@ const StandardPostCard: React.FC<PostCardProps> = ({
             each line (the old sm:text-center read as a landing page). */}
         <h3
           id={headingId}
-          className="break-words text-balance text-left font-serif text-2xl italic leading-tight text-[#fff7ec] sm:text-4xl"
+          className="break-words text-balance text-left font-serif text-2xl italic leading-tight text-foreground sm:text-4xl"
         >
           {heading}
         </h3>
@@ -880,7 +880,7 @@ const StandardPostCard: React.FC<PostCardProps> = ({
           className="h-px w-28 max-w-full bg-scent-accent/48"
           aria-hidden="true"
         />
-        <p className="max-w-3xl whitespace-pre-line break-words text-left text-sm leading-6 text-[#fff7ec]/78 sm:text-lg sm:leading-8">
+        <p className="max-w-3xl whitespace-pre-line break-words text-left text-sm leading-6 text-foreground/78 sm:text-lg sm:leading-8">
           {post.body}
         </p>
         <MetadataLine post={post} />
