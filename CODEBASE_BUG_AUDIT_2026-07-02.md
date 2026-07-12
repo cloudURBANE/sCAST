@@ -6,7 +6,10 @@
 > evidence-based audit, and explicitly lists candidates that were **refuted** so no
 > team re-burns time on them. Each finding names an owning area and a one-line fix
 > direction only. **Status note (2026-07-02):** all Part A findings (A1–A5) have since
-> landed on `main` via PR #508 — see the per-finding status lines. Part B remains open.
+> landed on `main` via PR #508 — see the per-finding status lines. **Status note
+> (2026-07-04):** Part B is now closed too — B1 (open portion), B2, B3, B4, and B6
+> fixed on `claude/skills-spawn-gaps-l87tdx`, guarded by `test_audit_gap_closures.py`;
+> B5 confirmed working-as-designed (no change). See the per-finding status lines.
 >
 > **How to use this.** Pick a finding, open the exact `file:line`, reproduce the
 > failure scenario, then fix under the repo's own doctrine (`CLAUDE.md`,
@@ -151,6 +154,16 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 
 ### B1. Orphaned `processing` jobs after a worker crash are never auto-reclaimed — **Plausible · Medium**
 
+> **Status: FIXED** (2026-07-04). Verification found the claim path already
+> reclaims expired leases (`db.claim_job` lease-stealing, worker auto-approve
+> reclaim — PR #69); the remaining open portion was `recover_or_enqueue_job`
+> preserving `processing` unconditionally. It now preserves a processing row
+> only under a live (non-NULL, unexpired) `claim_expires_at` lease, so an
+> orphan reopens to `pending` on the next `/details` view or heal sweep, and
+> `list_jobs(status="pending")` flips expired-lease orphans back to pending
+> before listing — so even a plain `--process-pending` drain (no dashboard,
+> no `/details` view) reclaims them. Guarded by `test_audit_gap_closures.py`.
+
 - **Where:** `db.py:863-919` (`claim_job` reclaims by id only), `db.py:820-846` /
   `api.py:6023-6035` (`list_jobs` defaults to `status="pending"`), `db.py:671-770`
   (`recover_or_enqueue_job` preserves `processing`, CASE at `:701-705`).
@@ -167,6 +180,13 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 
 ### B2. DB failure while reopening an incomplete job is masked as `"completed"` — **Plausible · Medium**
 
+> **Status: FIXED** (2026-07-04). `_recover_incomplete_enrichment_job` now
+> returns a non-None error state on a raised DB error (normalizing to
+> `"unavailable"`), and the `/details` stored-payload branch degrades
+> `unavailable` → `"completed"` only when no job state exists at all — the
+> raised case surfaces `"unavailable"` so the SPA keeps retrying. Guarded by
+> `test_audit_gap_closures.py`.
+
 - **Where:** `api.py:5073-5079` (details stored-payload branch),
   `api.py:4957-4987` (`_recover_incomplete_enrichment_job` swallows all exceptions →
   `None`), `api.py:4912-4921` (`_enrichment_status_from_job_state(None)` → `"unavailable"`).
@@ -181,6 +201,13 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
   status, never "completed").
 
 ### B3. Threadpool capacity (40) exceeds DB pool (15); cheap DB endpoints are ungated — **Plausible · Medium**
+
+> **Status: FIXED** (2026-07-04). The pool now bounds connection acquisition
+> (`DB_POOL_ACQUIRE_TIMEOUT`, default 5s) instead of psycopg's 30s default,
+> and an app-level handler maps `psycopg_pool.PoolTimeout` to the same
+> retryable 503 + `Retry-After` the scrape gates use. Saturation degrades
+> fast instead of hanging a thread 30s and 500ing. Guarded by
+> `test_audit_gap_closures.py`.
 
 - **Where:** `db.py:56` (`DEFAULT_DB_POOL_MAX_SIZE=15`), `db.py:244-264` (pool + `_conn`);
   all sync routes; `mobile.py:607-620` (dashboard polls `/api/m/overview` every ~4s).
@@ -197,6 +224,11 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 
 ### B4. Unbounded growth of `_DERIVED_METRICS_LOCKS` (slow memory leak) — **Confirmed · Low–Medium**
 
+> **Status: FIXED** (2026-07-04). Replaced the per-record dict with 256
+> fixed lock stripes selected by `crc32(key)`; a stripe collision merely
+> serializes two records' metric fills. No growth, no guard lock. Guarded by
+> `test_audit_gap_closures.py`.
+
 - **Where:** `api.py:240` (dict), `api.py:4530-4542` (`_derived_metrics_lock_for`).
 - **Symptom (hand-verified):** a per-record `threading.Lock` is inserted keyed by
   `record_key || canonical_fg_url || bn_url || "house|name|year"` and **never removed**
@@ -208,12 +240,23 @@ makes the candidate safe. Tests referenced are the in-repo `*.test.ts` / `test_*
 
 ### B5. `get_scraper()` builds a fresh session per request — **Confirmed · Low (throughput)**
 
+> **Status: NO CHANGE (2026-07-04, deliberate).** Re-verified unchanged; the
+> per-request session is the design that makes shared-scraper thread-safety a
+> non-issue. Left as-is per the audit's own note.
+
 - **Where:** `fragrance_parser_full_rewrite_fixed.py:6026-6033`.
 - **Note:** every `search`/`details`/brand-sweep builds a new cloudscraper/requests
   Session (new urllib3 pool). This is *why* there is no shared-scraper thread-safety bug
   (a design plus), but forgoes connection reuse. Not a leak. Throughput note only.
 
 ### B6. Diagnostics mint executor can leave a thread running past timeout — **Confirmed · Low**
+
+> **Status: FIXED** (2026-07-04). Both mint-diagnostic sites now run the mint
+> on a gated daemon thread (`_run_mint_bounded`): at most one in-flight mint
+> per site, overlapping calls get an immediate honest "busy" instead of
+> queueing behind a stuck mint, and a mint outliving the 90s budget can no
+> longer strand a thread per call nor block interpreter shutdown. Guarded by
+> `test_audit_gap_closures.py`.
 
 - **Where:** `api.py:3559-3581` (sibling at `:3918`).
 - **Symptom:** on `future.result(timeout=90)` TimeoutError,
