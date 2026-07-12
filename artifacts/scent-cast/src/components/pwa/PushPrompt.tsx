@@ -149,7 +149,7 @@ export function PushPrompt() {
                     type="button"
                     onClick={enable}
                     disabled={busy}
-                    className="rounded-full border border-scent-accent/70 bg-scent-accent/15 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fff7ec] transition-colors hover:bg-scent-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:pointer-events-none disabled:opacity-60"
+                    className="rounded-full border border-scent-accent/70 bg-scent-accent/15 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-foreground transition-colors hover:bg-scent-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40 disabled:pointer-events-none disabled:opacity-60"
                   >
                     {busy ? "Enabling…" : "Enable"}
                   </button>
@@ -186,7 +186,7 @@ export function PushPrompt() {
                   <button
                     type="button"
                     onClick={dismiss}
-                    className="rounded-full border border-neutral-800 bg-neutral-900/40 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fff7ec] transition-colors hover:bg-neutral-850"
+                    className="rounded-full border border-neutral-800 bg-neutral-900/40 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-foreground transition-colors hover:bg-neutral-850"
                   >
                     Got it
                   </button>

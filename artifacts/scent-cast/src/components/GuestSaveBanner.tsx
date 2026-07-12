@@ -46,7 +46,7 @@ export const GuestModeBanner: React.FC<GuestModeBannerProps> = ({
         <button
           type="button"
           onClick={onSignIn}
-          className="shrink-0 rounded-full border border-scent-accent/70 bg-scent-accent/15 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fff7ec] transition-colors hover:bg-scent-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40"
+          className="shrink-0 rounded-full border border-scent-accent/70 bg-scent-accent/15 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-foreground transition-colors hover:bg-scent-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40"
         >
           Sign in
         </button>
@@ -95,7 +95,7 @@ export const GuestSaveBanner: React.FC<GuestSaveBannerProps> = ({
         <button
           type="button"
           onClick={onSignIn}
-          className="shrink-0 rounded-full border border-scent-accent/70 bg-scent-accent/15 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-[#fff7ec] transition-colors hover:bg-scent-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40"
+          className="shrink-0 rounded-full border border-scent-accent/70 bg-scent-accent/15 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.18em] text-foreground transition-colors hover:bg-scent-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/40"
         >
           Sign in
         </button>

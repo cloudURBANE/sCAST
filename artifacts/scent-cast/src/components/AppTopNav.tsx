@@ -128,7 +128,7 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
       <DropdownMenuContent
         align="start"
         sideOffset={10}
-        className={`w-56 rounded-[8px] border-scent-accent/25 bg-[#090604]/95 p-1.5 text-[#fff7ec] shadow-[0_18px_48px_rgba(0,0,0,0.62)]${touchPerformanceMode ? '' : ' backdrop-blur-sm'}`}
+        className={`w-56 rounded-[8px] border-scent-accent/25 bg-[#090604]/95 p-1.5 text-foreground shadow-[0_18px_48px_rgba(0,0,0,0.62)]${touchPerformanceMode ? '' : ' backdrop-blur-sm'}`}
       >
         {displayName ? (
           <>

@@ -725,7 +725,7 @@ function ProfileScorePanel({
             parts={stat.cycle}
             primaryClass={
               compact
-                ? "text-[13px] text-[#fff7ec] font-serif italic truncate max-w-full"
+                ? "text-[13px] text-foreground font-serif italic truncate max-w-full"
                 : "font-serif italic text-2xl text-white leading-tight truncate max-w-full"
             }
             secondaryClass={
@@ -740,7 +740,7 @@ function ProfileScorePanel({
               <p
                 className={
                   compact
-                    ? "text-[13px] text-[#fff7ec] font-serif italic truncate max-w-full"
+                    ? "text-[13px] text-foreground font-serif italic truncate max-w-full"
                     : "font-serif italic text-2xl text-white leading-tight truncate max-w-full"
                 }
               >
@@ -1984,8 +1984,8 @@ export const Wardrobe: React.FC<{
     : true;
 
   const detailTitleClassName = constrainedDetailMode
-    ? "font-serif italic text-4xl sm:text-5xl leading-[0.95] text-[#fff7ec] tracking-normal uppercase"
-    : "font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-[#fff7ec] tracking-normal uppercase";
+    ? "font-serif italic text-4xl sm:text-5xl leading-[0.95] text-foreground tracking-normal uppercase"
+    : "font-serif italic text-5xl sm:text-7xl lg:text-8xl leading-[0.92] text-foreground tracking-normal uppercase";
   const detailGridClassName = stackedDetailMode
     ? "grid grid-cols-1 items-stretch gap-3 sm:gap-4"
     : "grid grid-cols-1 items-stretch gap-3 sm:gap-4 lg:grid-cols-[1.12fr_1.95fr_1fr]";
@@ -2191,7 +2191,7 @@ export const Wardrobe: React.FC<{
                     setSearchFocused(true);
                     searchInputRef.current?.focus();
                   }}
-                  className="absolute right-4 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-scent-accent transition-colors hover:bg-white/[0.08] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:right-5"
+                  className="absolute right-4 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full text-scent-accent transition-colors hover:bg-white/[0.08] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:right-5"
                 >
                   <X size={20} strokeWidth={1.75} aria-hidden />
                 </button>
@@ -2242,7 +2242,7 @@ export const Wardrobe: React.FC<{
                 }}
                 placeholder="Search vault (e.g. sauvage)..."
                 autoComplete="off"
-                className="scent-lux-input scent-vault-search-input w-full h-[58px] px-14 text-center text-[#fff7ec] font-sans text-[16px] outline-none transition-[color,background-color,border-color,box-shadow] placeholder:text-scent-text-subtle sm:h-[68px] sm:px-16"
+                className="scent-lux-input scent-vault-search-input w-full h-[58px] px-14 text-center text-foreground font-sans text-[16px] outline-none transition-[color,background-color,border-color,box-shadow] placeholder:text-scent-text-subtle sm:h-[68px] sm:px-16"
               />
               <AnimatePresence>
                 {searchDropdownOpen ? (
@@ -2378,20 +2378,23 @@ export const Wardrobe: React.FC<{
             />
           ) : null}
           {wardrobeError ? (
-            <div className="py-24 px-4 text-center border border-white/10 bg-white/[0.02] rounded-scent flex flex-col items-center justify-center gap-6">
-              <div className="space-y-2">
-                <p className="font-serif italic text-3xl text-white/90">Olfactory Vault Synchronization Offline</p>
-                <p className="text-sm text-scent-muted max-w-md mx-auto">{wardrobeError}</p>
+            /* Shared error surface (arena.tsx uses the same recipe) so failure
+               states speak one visual language app-wide; the classes also carry
+               the light-theme ink flip the old white/90-on-white box lacked. */
+            <div role="alert" className="mx-auto w-full max-w-xl py-16">
+              <div className="scent-error-panel rounded-[var(--radius-scent)] border p-6 text-center">
+                <p className="font-serif italic text-2xl">Olfactory Vault Synchronization Offline</p>
+                <p className="scent-error-body mt-3 text-sm leading-6">{wardrobeError}</p>
+                {onRetryLoadWardrobe && (
+                  <button
+                    type="button"
+                    onClick={onRetryLoadWardrobe}
+                    className="scent-error-action mt-5 inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2 scent-type-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                  >
+                    Retry Load
+                  </button>
+                )}
               </div>
-              {onRetryLoadWardrobe && (
-                <button
-                  type="button"
-                  onClick={onRetryLoadWardrobe}
-                  className="scent-primary-button px-8 py-3 rounded-scent font-serif italic text-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
-                >
-                  <span>Retry Load</span>
-                </button>
-              )}
             </div>
           ) : !wardrobeLoaded ? (
             <div
@@ -2766,7 +2769,7 @@ export const Wardrobe: React.FC<{
                                             inputMode={field === 'year' ? 'numeric' : 'text'}
                                             placeholder={field === 'year' ? 'e.g. 2018' : `Add ${label.toLowerCase()}`}
                                             aria-label={`Verify ${label}`}
-                                            className="w-44 bg-black/45 border border-white/15 rounded-md px-3 py-1.5 text-sm text-center text-[#fff7ec] outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                            className="w-44 bg-black/45 border border-white/15 rounded-md px-3 py-1.5 text-sm text-center text-foreground outline-none focus:border-scent-accent/50 disabled:opacity-40"
                                           />
                                           <button
                                             type="button"
@@ -3551,7 +3554,7 @@ export const Wardrobe: React.FC<{
                     disabled={imageToolbarBusy || addBusy || !onAdd}
                     aria-busy={addBusy}
                     aria-label={addBusy ? 'Adding to vault' : 'Add to vault'}
-                    className="scent-no-mobile-focus-ring group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip text-scent-accent transition-[color,background-color,opacity] hover:bg-scent-accent/[0.08] hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="scent-no-mobile-focus-ring group flex min-h-[46px] items-center justify-center gap-2 px-3 py-3 scent-type-chip text-scent-accent transition-[color,background-color,opacity] hover:bg-scent-accent/[0.08] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {addBusy ? (
                       <RefreshCw size={14} strokeWidth={1.75} className="animate-spin" aria-hidden />

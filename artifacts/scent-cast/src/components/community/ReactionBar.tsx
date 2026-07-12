@@ -99,7 +99,7 @@ export const ReactionBar: React.FC<ReactionBarProps> = ({
               // heart gold (see the Icon below). Keep the rounded focus ring +
               // tap target sizing only.
               'inline-flex items-center justify-center rounded-full scent-type-chip transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55',
-              active ? 'text-scent-accent' : 'text-scent-text-muted hover:text-[#fff7ec]',
+              active ? 'text-scent-accent' : 'text-scent-text-muted hover:text-foreground',
               compact ? 'min-h-9 gap-1.5 px-2.5 py-1.5' : 'min-h-11 gap-2 px-3.5 py-2.5',
             ].join(' ')}
           >

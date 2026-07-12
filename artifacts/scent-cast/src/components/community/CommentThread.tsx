@@ -98,13 +98,13 @@ const CommentNodeView: React.FC<CommentNodeViewProps> = ({
             <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 scent-type-meta uppercase">
               <Link
                 to={communitySharePath(node.author)}
-                className="min-w-0 max-w-full truncate font-bold text-scent-accent transition-colors hover:text-[#fff7ec]"
+                className="min-w-0 max-w-full truncate font-bold text-scent-accent transition-colors hover:text-foreground"
               >
                 {displayCommunityAuthor(node.author)}
               </Link>
               <span>{formatCommunityTime(node.createdAt)}</span>
             </div>
-            <p className="whitespace-pre-line text-base leading-7 text-[#fff7ec]/88">{node.body}</p>
+            <p className="whitespace-pre-line text-base leading-7 text-foreground/88">{node.body}</p>
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
               <ReactionBar
                 targetType="comment"
@@ -148,7 +148,7 @@ const CommentNodeView: React.FC<CommentNodeViewProps> = ({
                   autoFocus
                   placeholder={`Reply to ${displayCommunityAuthor(node.author)}`}
                   aria-label={`Reply to ${displayCommunityAuthor(node.author)}`}
-                  className="scent-lux-input min-h-16 w-full resize-y rounded-[var(--radius-scent)] px-3.5 py-2.5 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
+                  className="scent-lux-input min-h-16 w-full resize-y rounded-[var(--radius-scent)] px-3.5 py-2.5 text-base leading-7 text-foreground placeholder:text-scent-text-subtle"
                 />
                 <div className="flex items-center justify-end gap-2">
                   <button
@@ -157,14 +157,14 @@ const CommentNodeView: React.FC<CommentNodeViewProps> = ({
                       setShowReply(false);
                       setReplyBody('');
                     }}
-                    className="inline-flex min-h-9 items-center rounded-full px-3 py-1.5 scent-type-meta uppercase text-scent-muted transition-colors hover:text-[#fff7ec] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+                    className="inline-flex min-h-9 items-center rounded-full px-3 py-1.5 scent-type-meta uppercase text-scent-muted transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isPosting || !replyBody.trim()}
-                    className="inline-flex min-h-9 items-center gap-2 rounded-full bg-scent-accent/[0.09] px-3.5 py-1.5 scent-type-chip text-[#fff7ec] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.26)] transition-colors hover:bg-scent-accent/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55"
+                    className="inline-flex min-h-9 items-center gap-2 rounded-full bg-scent-accent/[0.09] px-3.5 py-1.5 scent-type-chip text-foreground shadow-[inset_0_0_0_1px_rgba(212,175,55,0.26)] transition-colors hover:bg-scent-accent/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55"
                   >
                     {isPosting ? (
                       <LoaderCircle size={13} className="animate-spin" aria-hidden="true" />
@@ -294,7 +294,7 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
           maxLength={2000}
           placeholder={authToken ? 'Add a comment' : 'Sign in to comment'}
           aria-label="Add a comment"
-          className="scent-lux-input min-h-24 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-[#fff7ec] placeholder:text-scent-text-subtle"
+          className="scent-lux-input min-h-24 w-full resize-y rounded-[var(--radius-scent)] px-4 py-3 text-base leading-7 text-foreground placeholder:text-scent-text-subtle"
         />
         {errorMessage ? (
           <p role="status" aria-live="polite" className="text-sm text-red-100">{errorMessage}</p>
@@ -306,7 +306,7 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
           <button
             type="submit"
             disabled={commentMutation.isPending || (authToken ? !body.trim() : false)}
-            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-scent-accent/[0.09] px-4 py-2 scent-type-chip text-[#fff7ec] shadow-[inset_0_0_0_1px_rgba(212,175,55,0.26)] transition-colors hover:bg-scent-accent/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full bg-scent-accent/[0.09] px-4 py-2 scent-type-chip text-foreground shadow-[inset_0_0_0_1px_rgba(212,175,55,0.26)] transition-colors hover:bg-scent-accent/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:pointer-events-none disabled:opacity-55"
           >
             {commentMutation.isPending ? (
               <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />

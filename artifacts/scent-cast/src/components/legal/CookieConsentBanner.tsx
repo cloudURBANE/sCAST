@@ -74,7 +74,7 @@ export function CookieConsentBanner() {
           >
             {/* Always-dark surface: ink is pinned to the dark-theme literals so the
                 light theme's flipped text tokens can't go dark-on-dark here. */}
-            <div className="scent-consent-surface pointer-events-auto w-full max-w-2xl rounded-[18px] border border-scent-accent/22 bg-[#0b0805]/95 p-4 text-[#fff7ec] shadow-[0_22px_60px_rgba(0,0,0,0.66)] backdrop-blur-md sm:p-5">
+            <div className="scent-consent-surface pointer-events-auto w-full max-w-2xl rounded-[18px] border border-scent-accent/22 bg-[#0b0805]/95 p-4 text-foreground shadow-[0_22px_60px_rgba(0,0,0,0.66)] backdrop-blur-md sm:p-5">
               <div className="flex items-start gap-3.5">
                 <span className="mt-0.5 hidden h-10 w-10 shrink-0 items-center justify-center rounded-full border border-scent-accent/30 bg-black/40 text-scent-accent sm:inline-flex">
                   <Cookie size={18} strokeWidth={1.75} aria-hidden="true" />
@@ -164,14 +164,14 @@ function ConsentManager({ onClose }: { onClose: () => void }) {
       <m.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        className="scent-consent-surface w-full max-w-lg rounded-[20px] border border-scent-accent/22 bg-[#0b0805]/97 p-5 text-[#fff7ec] shadow-[0_28px_70px_rgba(0,0,0,0.72)] sm:p-7"
+        className="scent-consent-surface w-full max-w-lg rounded-[20px] border border-scent-accent/22 bg-[#0b0805]/97 p-5 text-foreground shadow-[0_28px_70px_rgba(0,0,0,0.72)] sm:p-7"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="scent-type-label text-scent-accent/80">Cookie preferences</p>
             <h2
               id="cookie-manager-title"
-              className="mt-1.5 font-serif text-2xl italic leading-tight text-[#fff7ec]"
+              className="mt-1.5 font-serif text-2xl italic leading-tight text-foreground"
             >
               Choose what we store
             </h2>
@@ -254,7 +254,7 @@ function PreferenceRow({
         {icon}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[13px] font-semibold tracking-[0.02em] text-[#fff7ec]">{title}</p>
+        <p className="text-[13px] font-semibold tracking-[0.02em] text-foreground">{title}</p>
         <p className="mt-1 text-[12px] leading-relaxed text-[#bfae98]">{description}</p>
       </div>
       <div className="shrink-0 pt-1">{control}</div>

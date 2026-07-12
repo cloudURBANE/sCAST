@@ -224,7 +224,7 @@ export const ScentIntelligenceLoader: React.FC<ScentIntelligenceLoaderProps> = (
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.32, ease: EASE_OUT }}
-            className="font-serif italic text-xl text-[#fff7ec] drop-shadow-[0_0_22px_rgba(212,175,55,0.16)]"
+            className="font-serif italic text-xl text-foreground drop-shadow-[0_0_22px_rgba(212,175,55,0.16)]"
           >
             {status}
           </m.h3>
