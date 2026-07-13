@@ -43,7 +43,11 @@ import {
   visionGateCacheKey,
 } from "./imageVisionGate";
 import { pickVisionApprovedWinner } from "./imageVisionGateCore";
-import { acceptsImageCacheForRequest, shouldUseImageLookupCaches } from "./imagePipelineCachePolicy";
+import {
+  acceptsImageCacheForRequest,
+  sharesSearchQueryInFlight,
+  shouldUseImageLookupCaches,
+} from "./imagePipelineCachePolicy";
 export { acceptsImageCacheForRequest, shouldUseImageLookupCaches };
 
 const MAX_OUTPUT_DIMENSION = 1024;
@@ -699,7 +703,12 @@ export async function resolveProcessedFragranceImage(
   // deferred-image build path fires many of these in parallel, so this is where
   // the duplicate Serper calls originate.
   const searchQueryHash = input.searchQuery ? hashSearchQuery(input.searchQuery) : null;
-  if (!searchQueryHash || input.sourceUrl) {
+  // Requests carrying result-changing options (cache bypass, exclusions, custom
+  // Poof options, lookup-cache opt-out) must neither JOIN a plain in-flight
+  // resolution (they would receive the very image/processing they are trying to
+  // escape) nor REGISTER their specialized promise for plain callers — see
+  // sharesSearchQueryInFlight.
+  if (!searchQueryHash || input.sourceUrl || !sharesSearchQueryInFlight(input)) {
     return resolveProcessedFragranceImageInner(input, searchQueryHash);
   }
 
