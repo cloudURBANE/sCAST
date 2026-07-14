@@ -112,13 +112,16 @@ async function run(): Promise<void> {
   });
 
   console.log("\nCase 3 — Poof 200 with an opaque white background:");
-  console.log("  Post-patch behavior (cc0568c removed the hasOpaqueLightBackground guard):");
-  console.log("  this case IS now accepted as a successful removal.");
+  console.log("  WS-12 re-added the hasOpaqueLightBackground guard on every 200:");
+  console.log("  a preserved white plate is rejected and the trim fallback is used.");
   await withStubbedPoof({ status: 200, data: await makeOpaqueWhitePng() }, async () => {
+    // The input packshot has a transparent border, so the local chroma-key
+    // rescue declines and the result is the border-trim fallback carrying the
+    // Poof rejection reason.
     expect(
-      "opaque-white 200 → removed (post-patch)",
+      "opaque-white 200 → fallback (poof_white_background)",
       await pluck(input),
-      { backgroundRemoved: true, removeBgStatus: "removed", removeBgReason: "removed" },
+      { backgroundRemoved: false, removeBgStatus: "fallback", removeBgReason: "poof_white_background" },
     );
   });
 

@@ -440,6 +440,18 @@ test("sharesSearchQueryInFlight: only plain resolutions join the query-level ded
   assert.equal(sharesSearchQueryInFlight({ bypassSourceCache: true }), false);
   assert.equal(sharesSearchQueryInFlight({ excludeSourceUrlHashes: ["abc"] }), false);
   assert.equal(sharesSearchQueryInFlight({ poofOptions: { poofType: "product" } }), false);
+  // Refine mode / candidate breadth change what is searched.
+  assert.equal(sharesSearchQueryInFlight({ serperRefine: { refine: "solver" } }), false);
+  assert.equal(sharesSearchQueryInFlight({ maxCandidates: 6 }), false);
+
+  // Wardrobe recovery: same "brand name" query as the automatic resolution but
+  // explicitly escaping the (possibly dead) lookup cache — must NOT join a
+  // plain owner's flight or it is handed back the dead reference it was
+  // invoked to replace.
+  assert.equal(
+    sharesSearchQueryInFlight({ allowLookupCache: false, bypassSourceCache: true }),
+    false,
+  );
 });
 
 test("shouldRetryFailedImageStatus: stale failures can be retried", async () => {
@@ -656,26 +668,31 @@ test("data-URI decode tolerates RFC 2045 line-wrapped base64 (image M3)", () => 
 
 test("search-query flight key isolates two distinct fragrances that share a query hash (cross-serve)", () => {
   // Mirrors searchQueryFlightKey in imagePipeline.ts: the in-flight dedup key is
-  // composed of (lookupKey, searchQueryHash, bg-flag). Two different fragrances
-  // whose refined search queries normalize to the SAME hash must produce DIFFERENT
-  // flight keys so the first caller's resolved bottle is never handed to (and
-  // persisted for) the second. This is the in-flight twin of the lookupKey filter
-  // in getLatestReadyCachedImageBySearchQueryHash.
+  // composed of (lookupKey, searchQueryHash, bg-flag, vision-gate flag). Two
+  // different fragrances whose refined search queries normalize to the SAME hash
+  // must produce DIFFERENT flight keys so the first caller's resolved bottle is
+  // never handed to (and persisted for) the second. This is the in-flight twin
+  // of the lookupKey filter in getLatestReadyCachedImageBySearchQueryHash.
   const searchQueryFlightKey = (
     lookupKey: string,
     searchQueryHash: string,
     removeBackground: boolean,
-  ): string => `${lookupKey}:${searchQueryHash}:${removeBackground ? "1" : "0"}`;
+    visionGate: boolean,
+  ): string =>
+    `${lookupKey}:${searchQueryHash}:${removeBackground ? "1" : "0"}:${visionGate ? "vg1" : "vg0"}`;
 
   const sharedHash = "deadbeefdeadbeef";
-  const keyA = searchQueryFlightKey("Dior::Sauvage", sharedHash, true);
-  const keyB = searchQueryFlightKey("Creed::Aventus", sharedHash, true);
+  const keyA = searchQueryFlightKey("Dior::Sauvage", sharedHash, true, true);
+  const keyB = searchQueryFlightKey("Creed::Aventus", sharedHash, true, true);
   assert.notEqual(keyA, keyB, "distinct lookupKeys must not collapse to one in-flight result");
 
-  // Same fragrance + same query + same bg-flag → same key (intended dedup).
-  assert.equal(keyA, searchQueryFlightKey("Dior::Sauvage", sharedHash, true));
+  // Same fragrance + same query + same bg-flag + same gate → same key (intended dedup).
+  assert.equal(keyA, searchQueryFlightKey("Dior::Sauvage", sharedHash, true, true));
   // Same fragrance, different bg-flag → different slot (variant isolation).
-  assert.notEqual(keyA, searchQueryFlightKey("Dior::Sauvage", sharedHash, false));
+  assert.notEqual(keyA, searchQueryFlightKey("Dior::Sauvage", sharedHash, false, true));
+  // Same fragrance, different vision-gate flag → different slot: a gated
+  // automatic resolution must never be handed an ungated owner's winner.
+  assert.notEqual(keyA, searchQueryFlightKey("Dior::Sauvage", sharedHash, true, false));
 });
 
 test("min-edge floor rejects tiny thumbnails post-decode but keeps real packshots (WS-12 / image M4)", () => {

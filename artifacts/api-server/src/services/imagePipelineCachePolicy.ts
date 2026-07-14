@@ -58,9 +58,9 @@ export function shouldUseImageLookupCaches(
 /**
  * Whether a Serper-path resolution may participate in the search-query-level
  * in-flight dedup map (`inFlightBySearchQuery`). That map collapses concurrent
- * requests purely by (lookupKey, searchQueryHash, removeBackground), so ANY
- * request carrying options that change what an acceptable result is must stay
- * out — both directions are wrong otherwise:
+ * requests purely by (lookupKey, searchQueryHash, removeBackground, vision-gate
+ * flag), so ANY request carrying options that change what an acceptable result
+ * is must stay out — both directions are wrong otherwise:
  *   - joining: a solver refresh with `bypassSourceCache` / custom Poof options /
  *     `excludeSourceUrlHashes` that joins a plain in-flight resolution gets the
  *     exact image (or processing) it was asked to escape — the "guaranteed
@@ -69,17 +69,24 @@ export function shouldUseImageLookupCaches(
  *     its specialized output and skip its own lookup-cache consult.
  * `allowLookupCache === false` marks every such refresh/recovery path, and the
  * cache-affecting knobs are checked explicitly for defense in depth.
+ * `serperRefine` and `maxCandidates` are included because they change what is
+ * searched / how many candidates are considered, so a joined result would be
+ * computed under the other caller's settings.
  */
 export function sharesSearchQueryInFlight(input: {
   allowLookupCache?: boolean;
   bypassSourceCache?: boolean;
   excludeSourceUrlHashes?: string[];
   poofOptions?: object | null;
+  serperRefine?: unknown;
+  maxCandidates?: number;
 }): boolean {
   if (input.allowLookupCache === false) return false;
   if (input.bypassSourceCache === true) return false;
   if ((input.excludeSourceUrlHashes?.length ?? 0) > 0) return false;
   if (input.poofOptions != null) return false;
+  if (input.serperRefine != null) return false;
+  if (input.maxCandidates != null) return false;
   return true;
 }
 
