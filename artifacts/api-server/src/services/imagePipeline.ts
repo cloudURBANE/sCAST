@@ -229,18 +229,26 @@ function inFlightKey(
 // same search query both hit Serper before they can share a source hash. This
 // map collapses them one step earlier — at the query+bg granularity — so the
 // duplicate Serper round-trip (and the redundant Poof/sharp work behind it) is
-// avoided. Writes are idempotent, so this is purely a cost optimization.
+// avoided. Joining is only sound between requests that would compute the same
+// result, so only plain default-option requests participate (see
+// isPlainSearchQueryImageRequest); for those, writes are idempotent and the
+// dedup is purely a cost optimization.
 const inFlightBySearchQuery = new Map<string, Promise<ProcessedImageResult | null>>();
 
 // Keyed by lookupKey too: two different fragrances whose search queries
 // normalize to the same hash must NOT share one in-flight result, or the first
-// caller's bottle is handed to the second (and persisted for it).
+// caller's bottle is handed to the second (and persisted for it). The vision
+// gate is part of the key as well: a gated automatic resolution joining an
+// ungated owner's flight would receive a winner that never passed the
+// wrong-bottle check. (Requests with non-default options never enter the map
+// at all — see isPlainSearchQueryImageRequest.)
 function searchQueryFlightKey(
   lookupKey: string,
   searchQueryHash: string,
   removeBackground: boolean,
+  visionGate: boolean,
 ): string {
-  return `${lookupKey}:${searchQueryHash}:${removeBackground ? "1" : "0"}`;
+  return `${lookupKey}:${searchQueryHash}:${removeBackground ? "1" : "0"}:${visionGate ? "vg1" : "vg0"}`;
 }
 
 function preview(value: string | undefined, max = 140): string | undefined {
@@ -704,17 +712,22 @@ export async function resolveProcessedFragranceImage(
   // the duplicate Serper calls originate.
   const searchQueryHash = input.searchQuery ? hashSearchQuery(input.searchQuery) : null;
   // Requests carrying result-changing options (cache bypass, exclusions, custom
-  // Poof options, lookup-cache opt-out) must neither JOIN a plain in-flight
-  // resolution (they would receive the very image/processing they are trying to
-  // escape) nor REGISTER their specialized promise for plain callers — see
-  // sharesSearchQueryInFlight.
+  // Poof options, lookup-cache opt-out, refine mode, candidate breadth) must
+  // neither JOIN a plain in-flight resolution (they would receive the very
+  // image/processing they are trying to escape) nor REGISTER their specialized
+  // promise for plain callers — see sharesSearchQueryInFlight.
   if (!searchQueryHash || input.sourceUrl || !sharesSearchQueryInFlight(input)) {
     return resolveProcessedFragranceImageInner(input, searchQueryHash);
   }
 
   const removeBackground = input.removeBackground ?? true;
   const lookupKey = makeLookupKey(input.brand, input.name);
-  const flightKey = searchQueryFlightKey(lookupKey, searchQueryHash, removeBackground);
+  const flightKey = searchQueryFlightKey(
+    lookupKey,
+    searchQueryHash,
+    removeBackground,
+    input.visionGate === true,
+  );
   const existing = inFlightBySearchQuery.get(flightKey);
   if (existing) return existing;
 
