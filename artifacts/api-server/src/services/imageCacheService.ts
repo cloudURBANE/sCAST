@@ -668,14 +668,23 @@ export async function recordImageFailure(input: {
         target: conflict.target,
         targetWhere: conflict.targetWhere,
         set: {
-          processingStatus: "failed",
-          failureReason: input.failureReason.slice(0, 500),
+          // Never downgrade a "ready" row to "failed". The negative cache exists
+          // to suppress re-processing of sources that have never succeeded; a row
+          // that IS ready is backed by an already-uploaded object that stays
+          // perfectly servable even when the *source* URL later rots (404s) or a
+          // bypassSourceCache re-run (solver / wardrobe recovery) fails. Without
+          // this guard, one deterministic re-process failure silently removed a
+          // working cached image from every lookup for the whole retry window.
+          processingStatus: sql`case when ${imageCacheTable.processingStatus} = 'ready' then ${imageCacheTable.processingStatus} else 'failed' end`,
+          failureReason: sql`case when ${imageCacheTable.processingStatus} = 'ready' then ${imageCacheTable.failureReason} else ${input.failureReason.slice(0, 500)} end`,
           // Anchor the negative-cache TTL to the *first* failure: only advance
           // updated_at when transitioning into "failed" from another status. A
           // repeat failure of an already-failed row keeps the original
           // timestamp so the 6h retry window (shouldRetryFailedImageStatus) can
-          // actually elapse instead of being reset on every attempt (BE-5).
-          updatedAt: sql`case when ${imageCacheTable.processingStatus} = 'failed' then ${imageCacheTable.updatedAt} else now() end`,
+          // actually elapse instead of being reset on every attempt (BE-5). A
+          // preserved "ready" row keeps its timestamp too — this write must be
+          // a complete no-op for it.
+          updatedAt: sql`case when ${imageCacheTable.processingStatus} in ('ready', 'failed') then ${imageCacheTable.updatedAt} else now() end`,
         },
       });
   } catch (err) {

@@ -100,41 +100,49 @@ router.get("/image-proxy", async (req, res) => {
   res.on("finish", markResponseFinished);
 
   try {
-    const payload = await imageProxyCache.getOrLoad(cacheKey, async (signal): Promise<ImageProxyPayload> => {
-      // Prefer an authenticated read for our own processed objects so a bucket
-      // that is not browser-reachable (private, wrong public host, dead token,
-      // CORS) still serves same-origin. Processed objects are already-normalized
-      // WebPs, so the packshot-trim branch below never applies to them.
-      const processed = await readProcessedObjectBytes(target.toString());
-      if (processed) {
-        throwIfSignalAborted(signal);
-        return processed;
-      }
-
-      const upstream = await fetchExternalImage(target.toString(), { signal });
-      throwIfSignalAborted(signal);
-      let body = upstream.buffer;
-      let outType = upstream.contentType;
-
-      // Skip JPEG packshot trim for images that are already processed transparent
-      // WebPs from our own pipeline. Trim re-encodes to JPEG, which would flatten
-      // alpha onto white and undo background removal in the UI.
-      const isWebp = outType === "image/webp";
-      const isGif = outType === "image/gif";
-      const isProcessedObject = target.toString().includes("/images/processed/");
-      if (doTrim && !isWebp && !isGif && !isProcessedObject) {
-        const trimmed = await trimPackshotForImageProxy(body);
-        throwIfSignalAborted(signal);
-        if (trimmed.ok) {
-          body = trimmed.buffer;
-          outType = trimmed.contentType;
-        } else {
-          logger.debug({ url: String(url).slice(0, 120) }, "image-proxy: packshot trim skipped, passthrough");
+    // The client abort signal MUST reach getOrLoad: it detaches this consumer on
+    // disconnect, which frees the queue slot and — once the last consumer is
+    // gone — aborts the upstream fetch. Without it every disconnect listener
+    // above is dead code and abandoned loads pile up behind the concurrency cap.
+    const payload = await imageProxyCache.getOrLoad(
+      cacheKey,
+      async (signal): Promise<ImageProxyPayload> => {
+        // Prefer an authenticated read for our own processed objects so a bucket
+        // that is not browser-reachable (private, wrong public host, dead token,
+        // CORS) still serves same-origin. Processed objects are already-normalized
+        // WebPs, so the packshot-trim branch below never applies to them.
+        const processed = await readProcessedObjectBytes(target.toString());
+        if (processed) {
+          throwIfSignalAborted(signal);
+          return processed;
         }
-      }
 
-      return { body, contentType: outType };
-    });
+        const upstream = await fetchExternalImage(target.toString(), { signal });
+        throwIfSignalAborted(signal);
+        let body = upstream.buffer;
+        let outType = upstream.contentType;
+
+        // Skip JPEG packshot trim for images that are already processed transparent
+        // WebPs from our own pipeline. Trim re-encodes to JPEG, which would flatten
+        // alpha onto white and undo background removal in the UI.
+        const isWebp = outType === "image/webp";
+        const isGif = outType === "image/gif";
+        const isProcessedObject = target.toString().includes("/images/processed/");
+        if (doTrim && !isWebp && !isGif && !isProcessedObject) {
+          const trimmed = await trimPackshotForImageProxy(body);
+          throwIfSignalAborted(signal);
+          if (trimmed.ok) {
+            body = trimmed.buffer;
+            outType = trimmed.contentType;
+          } else {
+            logger.debug({ url: String(url).slice(0, 120) }, "image-proxy: packshot trim skipped, passthrough");
+          }
+        }
+
+        return { body, contentType: outType };
+      },
+      { signal: clientAbort.signal },
+    );
 
     res.setHeader("Content-Type", payload.contentType);
     res.setHeader("Cache-Control", cacheControl);

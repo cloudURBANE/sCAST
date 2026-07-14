@@ -420,6 +420,28 @@ test("shouldUseImageLookupCaches: allowLookupCache=false bypasses both caches", 
   assert.equal(shouldUseImageLookupCaches(undefined, "https://example.com/img.jpg"), false);
 });
 
+test("sharesSearchQueryInFlight: only plain resolutions join the query-level dedup", async () => {
+  // The inFlightBySearchQuery map collapses concurrent requests purely by
+  // (lookupKey, searchQueryHash, removeBackground). A request carrying options
+  // that change what an acceptable result is (solver refresh with cache bypass,
+  // exclusions, custom Poof options, or lookup-cache opt-out) must neither join
+  // a plain in-flight resolution nor register its own promise for plain callers
+  // — otherwise the solver's special processing silently never runs (the audit
+  // S2 "guaranteed no-op" class reintroduced via a race).
+  const { sharesSearchQueryInFlight } = await import("./imagePipelineCachePolicy.ts");
+
+  // Plain resolutions (the deferred build path) participate.
+  assert.equal(sharesSearchQueryInFlight({}), true);
+  assert.equal(sharesSearchQueryInFlight({ allowLookupCache: true }), true);
+  assert.equal(sharesSearchQueryInFlight({ excludeSourceUrlHashes: [] }), true);
+
+  // Refresh / solver / recovery requests stay out — each knob independently.
+  assert.equal(sharesSearchQueryInFlight({ allowLookupCache: false }), false);
+  assert.equal(sharesSearchQueryInFlight({ bypassSourceCache: true }), false);
+  assert.equal(sharesSearchQueryInFlight({ excludeSourceUrlHashes: ["abc"] }), false);
+  assert.equal(sharesSearchQueryInFlight({ poofOptions: { poofType: "product" } }), false);
+});
+
 test("shouldRetryFailedImageStatus: stale failures can be retried", async () => {
   const { shouldRetryFailedImageStatus } = await import("./imagePipelineCachePolicy.ts");
   const now = Date.UTC(2026, 4, 15, 12, 0, 0);
@@ -453,6 +475,15 @@ test("shouldNegativeCacheImageFailure: only deterministic failures are cached", 
   assert.equal(shouldNegativeCacheImageFailure(new Error("Invalid data image")), true);
   assert.equal(
     shouldNegativeCacheImageFailure(new Error("Input buffer contains unsupported image format")),
+    true,
+  );
+  // MIN_PROCESSED_EDGE rejection is deterministic for the source (the resize
+  // never enlarges), so it must be negative-cached — otherwise the same tiny
+  // thumbnail is re-downloaded and re-Poofed (paid) on every resolution attempt.
+  assert.equal(
+    shouldNegativeCacheImageFailure(
+      new Error("Optimized image below minimum edge: 120x96 (min 200px)"),
+    ),
     true,
   );
 

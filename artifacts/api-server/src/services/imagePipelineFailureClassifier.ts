@@ -40,6 +40,11 @@ const TERMINAL_MESSAGE_FRAGMENTS = [
   // Our own deterministic content guards.
   "invalid data image",
   "optimized image metadata missing dimensions",
+  // MIN_PROCESSED_EDGE rejection in processSourceToWebp: the resize never
+  // enlarges, so a source below the floor is below it on every retry. Without
+  // this fragment the tiny thumbnail was re-downloaded AND re-Poofed (paid) on
+  // every resolution attempt for the full life of the source.
+  "below minimum edge",
   // Sharp decode failures on genuinely unusable bytes.
   "unsupported image format",
   "input buffer contains unsupported image format",

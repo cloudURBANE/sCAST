@@ -55,6 +55,34 @@ export function shouldUseImageLookupCaches(
   return allowLookupCache !== false && !sourceUrl;
 }
 
+/**
+ * Whether a Serper-path resolution may participate in the search-query-level
+ * in-flight dedup map (`inFlightBySearchQuery`). That map collapses concurrent
+ * requests purely by (lookupKey, searchQueryHash, removeBackground), so ANY
+ * request carrying options that change what an acceptable result is must stay
+ * out — both directions are wrong otherwise:
+ *   - joining: a solver refresh with `bypassSourceCache` / custom Poof options /
+ *     `excludeSourceUrlHashes` that joins a plain in-flight resolution gets the
+ *     exact image (or processing) it was asked to escape — the "guaranteed
+ *     no-op" class from image selection audit S2, reintroduced via a race;
+ *   - registering: a plain caller joining the solver's promise would receive
+ *     its specialized output and skip its own lookup-cache consult.
+ * `allowLookupCache === false` marks every such refresh/recovery path, and the
+ * cache-affecting knobs are checked explicitly for defense in depth.
+ */
+export function sharesSearchQueryInFlight(input: {
+  allowLookupCache?: boolean;
+  bypassSourceCache?: boolean;
+  excludeSourceUrlHashes?: string[];
+  poofOptions?: object | null;
+}): boolean {
+  if (input.allowLookupCache === false) return false;
+  if (input.bypassSourceCache === true) return false;
+  if ((input.excludeSourceUrlHashes?.length ?? 0) > 0) return false;
+  if (input.poofOptions != null) return false;
+  return true;
+}
+
 export function shouldRetryFailedImageStatus(
   status: "ready" | "failed" | "processing" | null,
   updatedAt: Date | null | undefined,
