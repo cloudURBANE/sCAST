@@ -1366,11 +1366,12 @@ function DashboardView() {
                       // duplicated the search input's box): the pill hugs its
                       // label so the gold input above stays the block's only
                       // full-width capsule. Height keeps the 44px+ tap target.
-                      // A notch smaller and less tracked than the last pass
-                      // (design review: the pill still sat too close to the
-                      // search field in visual weight) — height/padding/tracking
-                      // each step down one register; 44px keeps the tap target.
-                      className="scent-signature-cta group inline-flex h-[44px] items-center justify-center rounded-full px-6 text-[11.5px] font-bold uppercase tracking-[0.09em] text-scent-accent focus-visible:outline-none sm:h-[50px] sm:px-8 sm:text-[12.5px] sm:tracking-[0.12em]"
+                      // Height/tracking stay one register below the search
+                      // field, but the pill runs LONGER than it is tall-ish
+                      // (owner call: the shrunken px-6 pill read as stubby) —
+                      // generous horizontal padding gives the label room to
+                      // breathe without raising the button's visual weight.
+                      className="scent-signature-cta group inline-flex h-[44px] items-center justify-center rounded-full px-10 text-[11.5px] font-bold uppercase tracking-[0.09em] text-scent-accent focus-visible:outline-none sm:h-[50px] sm:px-12 sm:text-[12.5px] sm:tracking-[0.12em]"
                       aria-label="Discover with Beam Agent"
                       title="Discover with Beam Agent"
                     >
