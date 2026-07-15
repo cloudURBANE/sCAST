@@ -463,74 +463,87 @@ function TypedReasonLine({ text }: { text: string }) {
 }
 
 /**
- * The lead-notes line, with wrap-safe separators. Each "· Note" pair is one
- * non-breaking token, and a layout pass hides the separator of any token that
- * starts a new visual line — so a wrap renders as
- *   Grapefruit · Green Mango
- *   Tomato
- * never with a dangling "· Tomato" (the orphaned leading dot was a flagged
- * production defect). Pure CSS can't do this in centered text (a line-leading
- * token is not at the container edge, so overflow-clip tricks don't apply);
- * the offsetTop comparison is the cheap, deterministic signal, re-run on
- * resize/font settle via ResizeObserver so zoom and Dynamic Type stay correct.
+ * The lead-notes line, wrap-proof by construction: it renders the LONGEST
+ * prefix of the notes that fits on ONE line and drops the rest ("Grapefruit ·
+ * Green Mango" instead of a wrapped "…· Tomato"). A hidden measurer span
+ * inside the same paragraph (identical inherited font) measures each candidate
+ * string, so the fit decision uses the browser's own text metrics.
+ *
+ * This replaces the previous mutate-and-observe version, which toggled
+ * separator `display` from inside its own ResizeObserver callback — hiding a
+ * dot changed the wrap, which re-fired the observer, which re-showed the dot:
+ * a per-frame feedback loop that visibly glitched the card while the
+ * AnimatePresence crossfade had two copies of this line mounted (the reported
+ * "glitching when tapping a new fragrance"). Here the observer only reads and
+ * lands in a value-gated setState, so a stable layout produces zero updates
+ * and no loop is possible; separators only ever render BETWEEN notes on one
+ * line, so an orphaned dot is structurally impossible.
  */
 function ForecastNotesLine({ notes }: { notes: string[] }) {
   const lineRef = useRef<HTMLParagraphElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
+  const [fitCount, setFitCount] = useState(notes.length);
+  const notesKey = notes.join('|');
 
   useLayoutEffect(() => {
     const line = lineRef.current;
-    if (!line) return;
+    const measure = measureRef.current;
+    if (!line || !measure) return;
+    let cancelled = false;
 
-    const update = () => {
-      const tokens = Array.from(line.querySelectorAll<HTMLElement>('[data-note-token]'));
-      let previous: HTMLElement | null = null;
-      for (const token of tokens) {
-        // Skip the third note while it's display:none below 360px.
-        if (token.offsetParent === null) continue;
-        const separator = token.querySelector<HTMLElement>('[data-note-separator]');
-        if (separator) {
-          const startsNewLine = previous !== null && token.offsetTop > previous.offsetTop + 1;
-          separator.style.display = startsNewLine ? 'none' : '';
-        }
-        previous = token;
+    const compute = () => {
+      if (cancelled) return;
+      const available = line.clientWidth;
+      if (available <= 0) return;
+      let count = notes.length;
+      while (count > 1) {
+        measure.textContent = notes.slice(0, count).join(' · ');
+        if (measure.offsetWidth <= available) break;
+        count -= 1;
       }
+      // Value-gated: a settled layout re-runs this to the same number and
+      // triggers no render — the loop terminates by construction.
+      setFitCount((current) => (current === count ? current : count));
     };
 
-    update();
-    const observer = new ResizeObserver(update);
+    compute();
+    // Re-fit on real width changes (rotation, resize, split view) and once the
+    // webfonts settle (glyph widths change without a box resize).
+    const observer = new ResizeObserver(compute);
     observer.observe(line);
-    return () => observer.disconnect();
-  }, [notes]);
+    if (document.fonts?.ready) void document.fonts.ready.then(compute);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+    // notesKey stands in for the notes array, whose identity changes render-to-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notesKey]);
+
+  const visible = notes.slice(0, Math.max(1, Math.min(fitCount, notes.length)));
 
   return (
-    // Same optics as before: warm cream serif italic, two-line cap. Only the
-    // separator ownership moved — each dot now lives INSIDE its note's
-    // non-breaking token so the pair wraps as a unit and the dot can be hidden
-    // at a line start. Gold stays on the separators alone (the name owns the
-    // card's one strong statement).
+    // Same optics as before: warm cream serif italic; gold stays on the tiny
+    // separators alone so the fragrance name owns the card's one strong
+    // statement. nowrap enforces the measured single-line decision whenever
+    // separators are present; a lone oversized note may wrap freely (there is
+    // no dot to orphan) under the two-line cap.
     <p
       ref={lineRef}
-      className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.9rem,3.1vw,1.1rem)] italic leading-snug text-scent-text-secondary sm:mt-2 md:mt-2.5 md:text-[clamp(1rem,1.7vw,1.2rem)]"
+      className={`relative mt-1.5 line-clamp-2 font-serif text-[clamp(0.9rem,3.1vw,1.1rem)] italic leading-snug text-scent-text-secondary sm:mt-2 md:mt-2.5 md:text-[clamp(1rem,1.7vw,1.2rem)] ${
+        visible.length > 1 ? 'whitespace-nowrap' : ''
+      }`}
     >
-      {notes.map((note, index) => (
-        <React.Fragment key={note}>
-          {/* Plain space OUTSIDE the nowrap token: adjacent nowrap spans with
-              no whitespace between them would form one unbreakable run and
-              overflow instead of wrapping. This space is the only permitted
-              break point, so a break always lands BETWEEN tokens. */}
-          {index > 0 ? ' ' : null}
-          <span
-            data-note-token
-            className={`whitespace-nowrap ${index >= 2 ? 'hidden min-[360px]:inline' : ''}`}
-          >
-            {index > 0 ? (
-              <span data-note-separator className="mr-[0.3em] text-scent-accent/75">
-                ·
-              </span>
-            ) : null}
-            {note}
-          </span>
-        </React.Fragment>
+      <span
+        ref={measureRef}
+        aria-hidden="true"
+        className="invisible absolute left-0 top-0 whitespace-nowrap"
+      />
+      {visible.map((note, index) => (
+        <span key={note}>
+          {index > 0 ? <span className="text-scent-accent/75"> · </span> : null}
+          {note}
+        </span>
       ))}
     </p>
   );
@@ -765,6 +778,35 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
     setSelected(wrapped);
   };
 
+  // Touch swipe on the recommendation card: swipe left → next day, right →
+  // previous — the same `go` path the chevrons and day tiles use. Touch/pen
+  // only: mouse drags would still deliver a click to the bottle button
+  // (down + up on the same element fires click regardless of travel), while a
+  // moved touch never synthesizes one, so taps on the bottle stay intact.
+  // `touch-pan-y` on the card keeps vertical page scrolling native and stops
+  // the browser from cancelling the pointer stream on horizontal movement.
+  // No pointer capture — capturing on the card would retarget the bottle
+  // button's tap. A swipe that ends outside the card is simply dropped.
+  const swipeStart = useRef<{ x: number; y: number; pointerId: number } | null>(null);
+  const handleSwipeStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'mouse') return;
+    swipeStart.current = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+  };
+  const handleSwipeEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    const start = swipeStart.current;
+    swipeStart.current = null;
+    if (!start || start.pointerId !== event.pointerId) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    // Deliberate horizontal gesture only: enough travel, clearly flatter than
+    // tall — anything else is a tap or a scroll and is left alone.
+    if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+    go(selected + (dx < 0 ? 1 : -1));
+  };
+  const handleSwipeCancel = () => {
+    swipeStart.current = null;
+  };
+
   const activePlan = outlook[selected] ?? null;
   const activeMeta = activePlan?.pick
     ? forecastMeta(activePlan.day, activePlan.pick.recommendation)
@@ -827,8 +869,14 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               viewport decisively; phone (27rem) and lg (46rem) are untouched. */}
           {/* Border a step quieter (0.2→0.16) with a touch more tonal lift in
               the fill — the card should read through elevation, not outline;
-              the strongest gold borders belong to the active states. */}
-          <div className="relative mx-auto mt-[var(--fc-title-hero)] w-full max-w-[27rem] overflow-hidden rounded-[28px] border border-scent-accent/[0.16] bg-gradient-to-b from-white/[0.055] via-black/20 to-black/35 sm:max-w-[34rem] sm:rounded-[32px] md:max-w-[44rem] lg:max-w-[46rem]">
+              the strongest gold borders belong to the active states. The card
+              is also horizontally swipeable (touch/pen) to change days. */}
+          <div
+            onPointerDown={handleSwipeStart}
+            onPointerUp={handleSwipeEnd}
+            onPointerCancel={handleSwipeCancel}
+            className="relative mx-auto mt-[var(--fc-title-hero)] w-full max-w-[27rem] touch-pan-y overflow-hidden rounded-[28px] border border-scent-accent/[0.16] bg-gradient-to-b from-white/[0.055] via-black/20 to-black/35 sm:max-w-[34rem] sm:rounded-[32px] md:max-w-[44rem] lg:max-w-[46rem]"
+          >
             {/* Centered on the card's axis like every other line in the module.
                 The old right-aligned "1 of 7" counter is gone: the seven-day rail
                 below already communicates position (labeled, tappable tiles with a
