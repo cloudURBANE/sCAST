@@ -45,6 +45,7 @@ import {
 import {
   BEAM_FEEDBACK_REASONS,
   humanizeBeamTool,
+  loadBeamConversation,
   runBeamAgentMission,
   submitBeamFeedback,
   type BeamAgentMission,
@@ -680,6 +681,48 @@ function newMessageId(): string {
     return crypto.randomUUID();
   }
   return `msg-${Date.now()}-${Math.floor(Math.random() * 1e9).toString(36)}`;
+}
+
+// W-11 follow-up: persist the live Beam session id so a page reload can reload
+// the durable transcript instead of starting a fresh thread. The value is bound
+// to the auth token it was created under, so a different login (or a guest) on
+// the same device never rehydrates a foreign session — belt-and-braces on top of
+// the endpoint's own server-side user scoping. Written only on a real Beam
+// completion; cleared by an explicit "start over".
+const BEAM_SESSION_STORAGE_KEY = 'scent_beam_session';
+
+function persistBeamSession(authToken: string | null, sessionId: string | undefined): void {
+  if (!authToken || !sessionId) return;
+  try {
+    localStorage.setItem(BEAM_SESSION_STORAGE_KEY, JSON.stringify({ token: authToken, sessionId }));
+  } catch {
+    /* storage unavailable (private mode / quota) — reload continuity degrades, nothing else */
+  }
+}
+
+function readBeamSession(authToken: string | null): string | undefined {
+  if (!authToken) return undefined;
+  try {
+    const raw = localStorage.getItem(BEAM_SESSION_STORAGE_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as { token?: unknown; sessionId?: unknown };
+    // Only honor a session created under the current token — never replay one
+    // captured by a previous account on this device.
+    if (parsed.token !== authToken || typeof parsed.sessionId !== 'string' || !parsed.sessionId) {
+      return undefined;
+    }
+    return parsed.sessionId;
+  } catch {
+    return undefined;
+  }
+}
+
+function clearBeamSession(): void {
+  try {
+    localStorage.removeItem(BEAM_SESSION_STORAGE_KEY);
+  } catch {
+    /* storage unavailable — nothing to clear */
+  }
 }
 
 function initialAgentMessage(itemCount: number): string {
@@ -1420,6 +1463,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   // recap — that block reads as repetitive/fake when it appears on every turn.
   const runEmittedCuesRef = useRef(false);
   const runDeliveredResultRef = useRef(false);
+  // Guards the one-shot transcript rehydration so it runs at most once per mount
+  // even as `authToken` settles (guest → signed-in) and re-renders occur.
+  const rehydratedRef = useRef(false);
 
   // Desktop click-drag for the cue strip; touch keeps native momentum scroll.
   useDragToScroll(quickReplyScrollRef);
@@ -1490,6 +1536,67 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   useEffect(() => {
     sessionIdRef.current = sessionId;
   }, [sessionId]);
+
+  // W-11 follow-up — rehydrate the durable transcript after a reload.
+  //
+  // `sessionId` lives only in React state, so a refresh drops the thread even
+  // though the server keeps it. Here we read the token-bound session persisted on
+  // the last completed turn and reload its turns from
+  // GET /api/beam-agent/conversations/:sessionId, folding them over the pristine
+  // greeting so the conversation continues where it left off. Runs once per mount
+  // (rehydratedRef), best-effort (a failure keeps the greeting), and never
+  // clobbers a thread the user has already started this session.
+  useEffect(() => {
+    if (rehydratedRef.current) return;
+    if (!authToken) return;
+    const storedSessionId = readBeamSession(authToken);
+    if (!storedSessionId) return;
+    rehydratedRef.current = true;
+
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const turns = await loadBeamConversation({
+          sessionId: storedSessionId,
+          authToken,
+          apiBaseUrl: API_BASE_URL,
+          signal: controller.signal,
+        });
+        if (turns.length === 0) return; // expired / nothing durable / foreign — keep the greeting
+        // The durable store holds only role + text, so rehydrated turns are plain
+        // bubbles (no per-turn recap/card/feedback — those aren't persisted).
+        const historical: PanelMessage[] = [];
+        for (const turn of turns) {
+          if (turn.role === 'user') {
+            historical.push({ id: newMessageId(), role: 'user', text: turn.content });
+          } else {
+            const { text } = formatAgentResponse(turn.content);
+            if (text) historical.push({ id: newMessageId(), role: 'agent', text });
+          }
+        }
+        if (historical.length === 0) return;
+        let folded = false;
+        setMessages((prev) => {
+          // Only fold history in over the untouched intro; never clobber a thread
+          // the user has already begun typing into this session.
+          if (prev.length !== 1 || prev[0].role !== 'agent') return prev;
+          folded = true;
+          return [prev[0], ...historical];
+        });
+        // Adopt the reloaded session only when its history actually landed, so the
+        // next turn continues the same server-side thread.
+        if (folded) {
+          beamSessionIdRef.current = storedSessionId;
+          sessionIdRef.current = storedSessionId;
+          setSessionId(storedSessionId);
+        }
+      } catch {
+        /* best-effort: a reload hiccup just leaves the greeting in place */
+      }
+    })();
+
+    return () => controller.abort();
+  }, [authToken]);
 
   // Land the user at the START of a new answer, not scrolled to its end. When a
   // fresh agent reply (or the curated-match reveal) arrives we align its top to
@@ -1961,6 +2068,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         beamSessionIdRef.current = result.sessionId;
         sessionIdRef.current = result.sessionId;
         setSessionId(result.sessionId);
+        // Durably remember the session (bound to this token) so a page reload can
+        // rehydrate the transcript from GET /conversations/:sessionId (W-11).
+        persistBeamSession(authToken, result.sessionId);
         if (result.status === 'completed') {
           // The user's Stop can also race a run that finishes anyway: if the
           // stream's completed frame lands before the local abort settles, the
@@ -2450,6 +2560,9 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
     setProposal(null);
     setAgentCardDelivered(false);
     beamSessionIdRef.current = undefined;
+    // Drop the persisted session too — an explicit fresh start must not rehydrate
+    // the old thread on the next reload.
+    clearBeamSession();
     setCurating(null);
     setCatalogFailure(false);
     setLastTurnOutcome(null);

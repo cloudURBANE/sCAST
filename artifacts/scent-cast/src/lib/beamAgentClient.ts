@@ -414,3 +414,50 @@ export async function submitBeamFeedback(options: SubmitBeamFeedbackOptions): Pr
     throw new BeamAgentError(`Feedback could not be recorded (${res.status}).`, res.status);
   }
 }
+
+/** One ordered turn of a reloaded transcript. Mirrors the server's `ConversationTurn`. */
+export type BeamConversationTurn = { role: 'user' | 'assistant'; content: string };
+
+export type LoadBeamConversationOptions = {
+  /** The durable session id to reload (persisted client-side across reloads). */
+  sessionId: string;
+  authToken: string;
+  apiBaseUrl?: string;
+  signal?: AbortSignal;
+};
+
+/**
+ * Reload a session's durable transcript from
+ * `GET /api/beam-agent/conversations/:sessionId` (W-11 follow-up).
+ *
+ * The endpoint is scoped to the caller server-side, so a session that belongs
+ * to no one / to another user / to an expired-and-unpersisted thread comes back
+ * as `{ turns: [] }` — this resolves to `[]` in every one of those cases, and
+ * the caller keeps its default greeting. Only a genuine HTTP failure throws
+ * `BeamAgentError`, so a reload hiccup never crashes the panel.
+ */
+export async function loadBeamConversation(
+  options: LoadBeamConversationOptions,
+): Promise<BeamConversationTurn[]> {
+  const base = (options.apiBaseUrl ?? '').replace(/\/+$/, '');
+  const res = await fetch(
+    `${base}/api/beam-agent/conversations/${encodeURIComponent(options.sessionId)}`,
+    {
+      headers: { Authorization: `Bearer ${options.authToken}` },
+      signal: options.signal,
+    },
+  );
+  if (!res.ok) {
+    throw new BeamAgentError(`Conversation could not be reloaded (${res.status}).`, res.status);
+  }
+  const data = (await res.json()) as { turns?: unknown };
+  if (!Array.isArray(data.turns)) return [];
+  return data.turns.filter(
+    (turn): turn is BeamConversationTurn =>
+      !!turn &&
+      typeof turn === 'object' &&
+      ((turn as { role?: unknown }).role === 'user' ||
+        (turn as { role?: unknown }).role === 'assistant') &&
+      typeof (turn as { content?: unknown }).content === 'string',
+  );
+}
