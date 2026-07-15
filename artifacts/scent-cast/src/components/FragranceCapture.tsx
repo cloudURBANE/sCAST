@@ -450,20 +450,6 @@ export const FragranceCapture: React.FC<{
   const [hasSearched, setHasSearched] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
   const [loadingSurface, setLoadingSurface] = useState<LoadingSurface>(null);
-  // sm+ gate (Tailwind's 640px breakpoint) so phone widths can swap in a
-  // shorter placeholder that fits between the centered field's icon padding
-  // instead of clipping mid-word ("…fragra" against the search glyph).
-  const [isSmUp, setIsSmUp] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches,
-  );
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(min-width: 640px)');
-    const sync = () => setIsSmUp(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
   const reduceMotion = useReducedMotion();
   // Canonical calm-motion gate (reduced-motion, phone-class touch, iPad Safari
   // performance mode) for the add-flow's height-collapse exits.
@@ -1370,7 +1356,12 @@ export const FragranceCapture: React.FC<{
                 setSearchFocused(false);
                 autoFocusPendingRef.current = false;
               }}
-              placeholder={searchFocused ? '' : isSmUp ? 'Search by house or fragrance...' : 'Search fragrances...'}
+              // One placeholder on every breakpoint (was "Search by house or
+              // fragrance..." on sm+ and this on phones — two registers for the
+              // same field across devices). The short copy is the one that fits
+              // between the centered field's icon padding at every width; the
+              // long variant clipped mid-word ("…fragra") on phones.
+              placeholder={searchFocused ? '' : 'Search fragrances...'}
               aria-label="Look up a brand or fragrance"
               className="scent-lux-input scent-vault-search-input relative z-0 h-[56px] w-full text-center font-sans text-base font-medium text-foreground outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[64px] scroll-mt-28 px-16 sm:px-[4.35rem]"
             />

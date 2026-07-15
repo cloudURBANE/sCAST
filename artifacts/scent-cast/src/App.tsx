@@ -1134,7 +1134,13 @@ function DashboardView() {
             min-height + padding relax to the original stacked rhythm. The Vault of
             Aromas is no longer part of this screen — it lives one scroll down as
             the "second page". */}
-        <div className={`flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+1.5rem)] sm:min-h-0 sm:gap-8 sm:pt-0 sm:pb-0 lg:gap-10 ${agentActive ? '' : 'justify-between sm:justify-start'}`}>
+        {/* sm/lg gaps tightened one step (was gap-8/gap-10): on iPad the four
+            stacked modules (search → Beam → atmosphere → forecast) each sat in
+            an isolated pocket of air, pushing the forecast hero — the product
+            value — a full extra beat down the page. The tighter cadence keeps
+            the modules reading as one composed column; phone rhythm
+            (justify-between) is untouched. */}
+        <div className={`flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+1.5rem)] sm:min-h-0 sm:gap-6 sm:pt-0 sm:pb-0 lg:gap-8 ${agentActive ? '' : 'justify-between sm:justify-start'}`}>
           {/* The hero ticker sits flush against the fixed top bar (no padding
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
