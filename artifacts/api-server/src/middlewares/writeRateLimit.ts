@@ -38,3 +38,14 @@ export const communityWriteRateLimit = rateLimitMiddleware({
   windowMs: MINUTE_MS,
   keyFn: userOrIpKey,
 });
+
+/** Account/profile mutations (profile, preferences, weather location, account
+ *  deletion). Settings writes are rare in normal use, so the cap is low enough
+ *  to stop a scripted flood (PUT /me/profile amplifies into a username
+ *  uniqueness SELECT per call) while never touching a real user. */
+export const meWriteRateLimit = rateLimitMiddleware({
+  name: "me-write",
+  limit: envInt("ME_WRITE_RATE_LIMIT", 30),
+  windowMs: MINUTE_MS,
+  keyFn: userOrIpKey,
+});

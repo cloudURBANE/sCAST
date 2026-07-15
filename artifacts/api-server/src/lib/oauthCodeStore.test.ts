@@ -6,40 +6,43 @@ import {
   _resetHandoffStore,
 } from "./oauthCodeStore.ts";
 
-test("mint → redeem returns the handoff once (single-use)", () => {
+// REDIS_URL is unset in the test environment, so these exercise the in-memory
+// fallback path — the same store production uses until Redis is provisioned.
+
+test("mint → redeem returns the handoff once (single-use)", async () => {
   _resetHandoffStore();
-  const code = mintHandoffCode({ token: "t-1", email: "a@example.com", pictureUrl: "http://p/x.png" });
+  const code = await mintHandoffCode({ token: "t-1", email: "a@example.com", pictureUrl: "http://p/x.png" });
   assert.match(code, /^[A-Za-z0-9_-]+$/); // base64url, no URL-unsafe chars
-  const first = redeemHandoffCode(code);
+  const first = await redeemHandoffCode(code);
   assert.deepEqual(first, { token: "t-1", email: "a@example.com", pictureUrl: "http://p/x.png" });
   // second redemption fails — the code is consumed
-  assert.equal(redeemHandoffCode(code), null);
+  assert.equal(await redeemHandoffCode(code), null);
 });
 
-test("redeem is null for an unknown code", () => {
+test("redeem is null for an unknown code", async () => {
   _resetHandoffStore();
-  assert.equal(redeemHandoffCode("never-minted"), null);
+  assert.equal(await redeemHandoffCode("never-minted"), null);
 });
 
-test("expired code (past 60s TTL) does not redeem", () => {
+test("expired code (past 60s TTL) does not redeem", async () => {
   _resetHandoffStore();
   const t0 = 1_000_000;
-  const code = mintHandoffCode({ token: "t-2", email: "b@example.com" }, t0);
-  assert.equal(redeemHandoffCode(code, t0 + 60_001), null);
+  const code = await mintHandoffCode({ token: "t-2", email: "b@example.com" }, t0);
+  assert.equal(await redeemHandoffCode(code, t0 + 60_001), null);
 });
 
-test("code within TTL redeems", () => {
+test("code within TTL redeems", async () => {
   _resetHandoffStore();
   const t0 = 2_000_000;
-  const code = mintHandoffCode({ token: "t-3", email: "c@example.com" }, t0);
-  assert.deepEqual(redeemHandoffCode(code, t0 + 59_000), { token: "t-3", email: "c@example.com" });
+  const code = await mintHandoffCode({ token: "t-3", email: "c@example.com" }, t0);
+  assert.deepEqual(await redeemHandoffCode(code, t0 + 59_000), { token: "t-3", email: "c@example.com" });
 });
 
-test("mint prunes expired entries so an abandoned login can't accumulate", () => {
+test("mint prunes expired entries so an abandoned login can't accumulate", async () => {
   _resetHandoffStore();
   const t0 = 3_000_000;
-  const stale = mintHandoffCode({ token: "old", email: "old@example.com" }, t0);
+  const stale = await mintHandoffCode({ token: "old", email: "old@example.com" }, t0);
   // Minting far in the future prunes the stale entry; redeeming it then fails.
-  mintHandoffCode({ token: "new", email: "new@example.com" }, t0 + 120_000);
-  assert.equal(redeemHandoffCode(stale, t0 + 120_000), null);
+  await mintHandoffCode({ token: "new", email: "new@example.com" }, t0 + 120_000);
+  assert.equal(await redeemHandoffCode(stale, t0 + 120_000), null);
 });

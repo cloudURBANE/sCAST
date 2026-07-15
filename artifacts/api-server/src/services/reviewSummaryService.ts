@@ -89,11 +89,13 @@ async function generateWithGemini(fragranceName: string, reviews: string[]): Pro
   const apiKey = geminiApiKey();
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY (or GOOGLE_API_KEY)");
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  // Key travels in a header, never the URL — URLs get logged (proxies, error
+  // paths, fetch failures that stringify the request), headers don't.
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
 
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt(fragranceName, reviews) }] }],

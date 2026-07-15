@@ -69,10 +69,11 @@ export function peekVisionGateVerdict(cacheKey: string | null): VisionGateVerdic
 }
 
 async function askGemini(prompt: string, image: VisionGateImage): Promise<string> {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${geminiApiKey()}`;
+  // Key in a header, not the URL, so it can never leak through URL logging.
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": geminiApiKey() },
     signal: AbortSignal.timeout(GEMINI_TIMEOUT_MS),
     body: JSON.stringify({
       contents: [

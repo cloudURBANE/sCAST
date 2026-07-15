@@ -1,11 +1,21 @@
 import { Router } from "express";
 import { logger } from "../lib/logger";
+import { rateLimitMiddleware } from "../lib/rateLimit";
 import {
   EnrichmentQueueError,
   getEnrichmentStatus,
 } from "../services/enrichmentQueue";
 
 const router = Router();
+
+// Public + DB-backed, so cap it per IP: the SPA polls at most a handful of
+// tiles at once, while an anonymous scraper could otherwise turn this into a
+// free DB query loop.
+const enrichmentStatusRateLimit = rateLimitMiddleware({
+  name: "enrichment-status",
+  limit: 60,
+  windowMs: 60_000,
+});
 
 /**
  * Public enrichment status lookup.
@@ -16,7 +26,7 @@ const router = Router();
  * Pass 1: read-only. Returns a `not_found` shape when no job matches. No
  * endpoint creates enrichment jobs automatically yet.
  */
-router.get("/enrichment/status", async (req, res) => {
+router.get("/enrichment/status", enrichmentStatusRateLimit, async (req, res) => {
   const fgUrl = typeof req.query.fg_url === "string" ? req.query.fg_url : undefined;
   const jobKey = typeof req.query.job_key === "string" ? req.query.job_key : undefined;
 

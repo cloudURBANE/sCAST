@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { AuthRequest, isUndefinedColumnError, requireAuth } from "../middlewares/auth";
 import { getTenantId } from "../middlewares/tenant";
+import { meWriteRateLimit } from "../middlewares/writeRateLimit";
 import { db } from "@workspace/db";
 import {
   usersTable,
@@ -184,7 +185,7 @@ router.get("/me/weather-location", requireAuth, async (req: AuthRequest, res) =>
   }
 });
 
-router.put("/me/weather-location", requireAuth, async (req: AuthRequest, res) => {
+router.put("/me/weather-location", requireAuth, meWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
   const body = (req.body ?? {}) as { lat?: unknown; lon?: unknown; label?: unknown };
@@ -236,7 +237,7 @@ router.put("/me/weather-location", requireAuth, async (req: AuthRequest, res) =>
   });
 });
 
-router.delete("/me/weather-location", requireAuth, async (req: AuthRequest, res) => {
+router.delete("/me/weather-location", requireAuth, meWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   try {
     await db
@@ -257,7 +258,7 @@ router.delete("/me/weather-location", requireAuth, async (req: AuthRequest, res)
   res.json({ location: null });
 });
 
-router.put("/me/profile", requireAuth, async (req: AuthRequest, res) => {
+router.put("/me/profile", requireAuth, meWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
 
@@ -374,7 +375,7 @@ router.get("/me/preferences", requireAuth, async (req: AuthRequest, res) => {
   res.json({ preferences: prefs });
 });
 
-router.put("/me/preferences", requireAuth, async (req: AuthRequest, res) => {
+router.put("/me/preferences", requireAuth, meWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
   const body = (req.body ?? {}) as { theme?: unknown; accent?: unknown; locale?: unknown };
@@ -498,7 +499,7 @@ router.get("/me/scent-preferences", requireAuth, async (req: AuthRequest, res) =
   res.json({ scentPreferences: prefs });
 });
 
-router.put("/me/scent-preferences", requireAuth, async (req: AuthRequest, res) => {
+router.put("/me/scent-preferences", requireAuth, meWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   const tenantId = getTenantId(req);
   const body = (req.body ?? {}) as {
@@ -640,7 +641,7 @@ router.get("/me/export", requireAuth, async (req: AuthRequest, res) => {
   });
 });
 
-router.delete("/me", requireAuth, async (req: AuthRequest, res) => {
+router.delete("/me", requireAuth, meWriteRateLimit, async (req: AuthRequest, res) => {
   const user = req.user!;
   try {
     // Atomic: either the whole account is removed or nothing is. Delete this
