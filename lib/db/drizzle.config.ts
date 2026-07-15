@@ -16,8 +16,7 @@ if (!process.env.DATABASE_URL) {
 // tables are never introspected and can never be dropped or renamed. The list is
 // derived from the runtime schema barrel (src/schema/index.ts) so it stays in
 // sync automatically: add a table to the barrel and it's covered; tables not in
-// the barrel (foreign apps, or the unwired conversations/messages) are left
-// untouched.
+// the barrel (foreign apps) are left untouched.
 const appTables = Object.values(schema)
   .filter((value): value is Table => is(value, Table))
   .map((table) => getTableName(table));
@@ -49,8 +48,9 @@ export default defineConfig({
   schema: "./src/schema/index.ts",
   dialect: "postgresql",
   // The schema surface is the runtime barrel (index.ts), NOT a glob over the
-  // directory: conversations.ts / messages.ts exist on disk but are deliberately
-  // unwired, and must not be created by migrations or dragged into push diffs.
+  // directory. conversations.ts / messages.ts (the beam_conversations /
+  // beam_messages transcript store, W-11) are now wired into the barrel and are
+  // managed like any other app table.
   // Versioned migrations (drizzle-kit generate → SQL files + meta/_journal.json).
   // Prod applies ONLY these reviewed files (src/migrate.ts); `push` stays a
   // local-dev convenience behind the preflight guard. pre-baseline/ holds the

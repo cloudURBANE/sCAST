@@ -27,10 +27,11 @@ import {
  *
  * The server holds no session state: every request carries the full mission
  * state, the server validates it, executes one step (a chat turn or a node
- * execution), and returns patches the client applies. Chat persistence is
- * deliberately deferred — the existing `conversations`/`messages` tables are
- * not tenant/user-scoped, so nothing is written to them (see
- * docs/SCENT_MISSION_GUIDE.md).
+ * execution), and returns patches the client applies. This scripted mission
+ * service stays intentionally stateless and writes no chat history of its own.
+ * (Durable Beam-agent transcripts DO now persist, via the separate
+ * `/api/beam-agent` path → `beam_conversations`/`beam_messages`; see
+ * services/beamConversationStore.ts and docs/SCENT_MISSION_GUIDE.md.)
  */
 
 const MAX_USER_MESSAGE_LENGTH = 2_000;
