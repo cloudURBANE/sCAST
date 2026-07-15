@@ -383,7 +383,10 @@ html {
 .scent-signature-cta {
   position: relative;
   overflow: hidden;
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.3);
+  /* A step quieter than before (0.3): the ladder is search input (0.62) ≫
+     this pill ≫ passive panel frames, so the search field is unmistakably the
+     primary action and Beam reads as the premium alternative, not a peer. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.24);
   background-color: rgba(0, 0, 0, 0.35);
   /* Interior gold veil: strongest at the top hairline, gone by two-thirds
      down — dimensionality without competing with the search capsule above. */
@@ -2295,7 +2298,7 @@ html {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.38rem;
+  gap: 0.45rem;
   padding: 0.85rem 1rem;
   text-align: center;
 }

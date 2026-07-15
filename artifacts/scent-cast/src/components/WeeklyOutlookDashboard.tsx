@@ -333,22 +333,28 @@ function crowdScore(item: Fragrance): number | null {
 function describeForecastPick(day: WeatherForecastDay, pick: WeatherOutlookPick): string {
   const weekday = relativeDayPhrase(day.date);
   const character = pickCharacter(pick.item);
+  const characterLead = character.charAt(0).toUpperCase() + character.slice(1);
   const mood = temperatureMood(day);
+  // "today's mild air" / "Friday's cool air" — the selected day stays named so
+  // the sentence always describes the day the card is showing, never drifts to
+  // a generic "today" while a future tab is selected.
+  const dayAir = mood ? `${weekday}'s ${mood} air` : `${weekday}'s conditions`;
 
+  // The old register opened every line with "Picked for <day>:" — promotional
+  // framing that buried the actual reason. Each branch now leads with the
+  // scent's character and states the strongest real factor in one clause.
   const season = matchedSeasonLabel(pick.item, mood, day.date);
   if (season) {
-    return `Picked for ${weekday}: a ${character} scent your community rates ideal for ${season}.`;
+    return `${characterLead} notes suit ${dayAir} — community-rated ideal for ${season}.`;
   }
 
   const crowd = crowdScore(pick.item);
   if (crowd !== null && crowd >= 78) {
-    const tail = mood ? `${mood} air` : "today's conditions";
-    return `Picked for ${weekday}: a crowd-favorite ${character} scent matched to ${tail}.`;
+    return `A crowd-favorite ${character} pick, matched to ${dayAir}.`;
   }
 
-  const verdict = WEAR_WINDOW_PHRASE[pick.recommendation.wear_window] ?? 'balances well today';
-  const tail = mood ? ` in ${mood} air` : '';
-  return `Picked for ${weekday}: its ${character} character ${verdict}${tail}.`;
+  const verdict = WEAR_WINDOW_PHRASE[pick.recommendation.wear_window] ?? 'balances well';
+  return `Its ${character} character ${verdict} in ${dayAir}.`;
 }
 
 /** Pace of the reason line's type-on reveal. The delay lets the hero's slide
@@ -475,7 +481,7 @@ function ForecastHero({
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              className="group forecast-hero-bottle relative h-full w-[54%] max-w-[14rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[52%] sm:max-w-[15.5rem] md:max-w-[17rem]"
+              className="group forecast-hero-bottle relative h-full w-[54%] max-w-[14rem] shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[52%] sm:max-w-[15.5rem] md:max-w-[19rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
               <BottleImage
@@ -507,14 +513,14 @@ function ForecastHero({
                   ("DOLCE & GABBANA") composes as two even centered lines
                   instead of one ragged break; sm+ keeps the original size and
                   0.3em spacing untouched. */}
-              <p className="scent-type-label text-balance text-[10px] tracking-[0.22em] text-scent-accent/80 [text-indent:0.22em] sm:text-[12px] sm:tracking-[0.3em] sm:[text-indent:0.3em] md:text-[13px]">
+              <p className="scent-type-label text-balance text-[10px] tracking-[0.22em] text-scent-accent/80 [text-indent:0.22em] sm:text-[12px] sm:tracking-[0.3em] sm:[text-indent:0.3em] md:text-[14px]">
                 {pick.brand}
               </p>
-              {/* Name sized one notch smaller with tighter leading (was
-                  1.35–2.1rem / 1.07) so a 3-line wrap like "Silver Mountain
-                  Water" stacks shorter and no longer out-weighs the bottle
-                  beside it — the bottle stays the hero, the name supports it. */}
-              <p className="mt-1 font-serif text-[clamp(1.22rem,5vw,1.9rem)] leading-[1.02] text-scent-text-primary [overflow-wrap:break-word] md:mt-1.5 md:text-[clamp(2.1rem,4.4vw,2.85rem)] md:leading-[1.05]">
+              {/* Phone size trimmed a further step so a long name like "Silver
+                  Mountain Water" stacks in three lines, not four — the bottle
+                  stays the hero, the name supports it. md steps UP slightly so
+                  the wider iPad card's interior scale matches its frame. */}
+              <p className="mt-1 font-serif text-[clamp(1.15rem,4.6vw,1.75rem)] leading-[1.02] text-scent-text-primary [overflow-wrap:break-word] md:mt-1.5 md:text-[clamp(2.2rem,4.6vw,3rem)] md:leading-[1.05]">
                 {pick.name}
               </p>
               {notes.length > 0 ? (
@@ -523,10 +529,13 @@ function ForecastHero({
                 // 360px instead of line-clamp cutting the joined string mid-way
                 // and stranding a "Bergamot ·…" dangling-separator ellipsis on
                 // SE-class screens. Wider viewports see the identical joined line.
-                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.9rem,3.1vw,1.1rem)] italic leading-snug text-scent-accent sm:mt-2 md:mt-2.5 md:text-[clamp(1rem,1.7vw,1.2rem)]">
+                // Warm cream, not gold: fully gold notes competed with the
+                // fragrance name for the card's one strong statement. Only the
+                // tiny separators keep the accent, so the name owns the moment.
+                <p className="mt-1.5 line-clamp-2 font-serif text-[clamp(0.9rem,3.1vw,1.1rem)] italic leading-snug text-scent-text-secondary sm:mt-2 md:mt-2.5 md:text-[clamp(1rem,1.7vw,1.2rem)]">
                   {notes.map((note, index) => (
                     <span key={note} className={index >= 2 ? 'hidden min-[360px]:inline' : undefined}>
-                      {index > 0 ? ' · ' : ''}
+                      {index > 0 ? <span className="text-scent-accent/75"> · </span> : ''}
                       {note}
                     </span>
                   ))}
@@ -659,7 +668,11 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           metadata; the serif names it as the daily editorial feature it is.
           Scaled to a module (not page) register so the hero below stays the
           focal point. */}
-      <h2 className="forecast-title font-serif italic text-[clamp(1.35rem,4.8vw,1.6rem)] tracking-normal leading-none text-[#fff7ec] sm:text-[clamp(1.55rem,2.5vw,1.85rem)]">
+      {/* One register smaller than before (≈8%): the section label was close
+          enough in scale to the fragrance name inside the card that the two
+          competed as headlines. At this size it reads as the section's name
+          while the pick's name keeps the editorial moment. */}
+      <h2 className="forecast-title font-serif italic text-[clamp(1.25rem,4.4vw,1.5rem)] tracking-normal leading-none text-[#fff7ec] sm:text-[clamp(1.45rem,2.3vw,1.7rem)]">
         Scent Forecast
       </h2>
 
@@ -687,14 +700,21 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
               for the same reason: at 640–767px the old 27rem cap starved the
               bottle column (a 141px bottle in a 224px slot); the wider row lets
               the square genuinely earn the sm slot height. */}
-          <div className="relative mx-auto mt-[var(--fc-title-hero)] w-full max-w-[27rem] overflow-hidden rounded-[28px] border border-scent-accent/20 bg-gradient-to-b from-white/[0.045] via-black/20 to-black/35 sm:max-w-[34rem] sm:rounded-[32px] md:max-w-[42rem] lg:max-w-[46rem]">
+          {/* md cap widened 42→44rem: on iPad portrait the card sat visibly
+              narrower than the tablet column it anchors, reading as a phone
+              composition centered in a large canvas. The wider frame (with the
+              matching internal scale bumps below) lets the hero use the tablet
+              viewport decisively; phone (27rem) and lg (46rem) are untouched. */}
+          <div className="relative mx-auto mt-[var(--fc-title-hero)] w-full max-w-[27rem] overflow-hidden rounded-[28px] border border-scent-accent/20 bg-gradient-to-b from-white/[0.045] via-black/20 to-black/35 sm:max-w-[34rem] sm:rounded-[32px] md:max-w-[44rem] lg:max-w-[46rem]">
             {/* Centered on the card's axis like every other line in the module.
                 The old right-aligned "1 of 7" counter is gone: the seven-day rail
                 below already communicates position (labeled, tappable tiles with a
                 highlighted selection — the richer affordance), so the counter was
                 duplicate positional chrome that also pulled the day label off the
                 centered axis. text-indent matches the tracking for optical center. */}
-            <div className="flex items-center justify-center border-b border-white/[0.055] px-4 py-2.5 sm:px-5 sm:py-3">
+            {/* Strip padding trimmed a step so the day label reads as a quiet
+                caption on the card rather than a boxed header band of its own. */}
+            <div className="flex items-center justify-center border-b border-white/[0.055] px-4 py-2 sm:px-5 sm:py-2.5">
               <p className="text-[9px] font-semibold uppercase tracking-[0.2em] [text-indent:0.2em] text-scent-accent/85 sm:text-[10px]">
                 {relativeDayLabel(activePlan.day.date)}
               </p>
@@ -703,7 +723,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
             <div
               id="scent-forecast-active-panel"
               role="tabpanel"
-              className="relative flex h-[11.5rem] w-full items-center justify-between gap-1.5 px-1 sm:h-[14rem] sm:gap-3 sm:px-2 md:h-[16.5rem] md:gap-5 md:px-3"
+              className="relative flex h-[11.5rem] w-full items-center justify-between gap-1.5 px-1.5 sm:h-[14rem] sm:gap-3 sm:px-2.5 md:h-[17.5rem] md:gap-5 md:px-4"
             >
               <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
               <div className="relative h-full flex-1 overflow-hidden">
@@ -729,7 +749,10 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: prefersReducedMotion ? 0.01 : 0.45, delay: prefersReducedMotion ? 0 : 0.18, ease: CALM_EASE }}
                   className="forecast-meta-pill inline-flex min-h-8 max-w-full items-center gap-2 text-scent-text-secondary md:gap-2.5">
-                  <span className="flex items-center text-scent-accent/75" aria-hidden>
+                  {/* Cream, not gold: the day token beside it is this line's one
+                      gold element; a gold glyph doubled the accent in a caption
+                      that should read as quiet supporting data. */}
+                  <span className="flex items-center text-scent-text-secondary/85" aria-hidden>
                     <WeatherGlyph day={activePlan.day} size={14} />
                   </span>
                   <span className="truncate text-[10px] font-medium uppercase tracking-[0.12em] sm:text-[12px] sm:tracking-[0.14em] md:text-[13px]">
@@ -765,7 +788,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
           <div
             role="tablist"
             aria-label="Days this week"
-            className="mx-auto mt-[var(--fc-pill-rail)] grid w-full max-w-[28.5rem] grid-cols-7 gap-1 sm:gap-2 md:max-w-[34rem] md:gap-3"
+            className="mx-auto mt-[var(--fc-pill-rail)] grid w-full max-w-[28.5rem] grid-cols-7 gap-1 sm:gap-2 md:max-w-[36rem] md:gap-3"
           >
             {outlook.slice(0, 7).map((plan, index) => {
               const isActive = index === selected;
@@ -826,7 +849,10 @@ function ForecastChevron({ direction, onClick }: { direction: 'prev' | 'next'; o
       aria-label={direction === 'prev' ? 'Previous day' : 'Next day'}
       className="forecast-chevron flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-scent-accent/70 hover:text-scent-gold-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 md:h-[3.25rem] md:w-[3.25rem]"
     >
-      <Icon size={22} strokeWidth={1.5} aria-hidden className="md:h-[26px] md:w-[26px]" />
+      {/* Glyph a step smaller than before (22/26): at the old size the bare
+          chevrons read as near-peers of the day-strip label. The 44px+ button
+          keeps the full tap target; only the drawn glyph shrinks. */}
+      <Icon size={19} strokeWidth={1.5} aria-hidden className="md:h-[24px] md:w-[24px]" />
     </button>
   );
 }
