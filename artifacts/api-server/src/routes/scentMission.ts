@@ -98,10 +98,11 @@ async function chatWithOpenAi(context: ScentMissionChatContext): Promise<string>
 }
 
 async function chatWithGemini(context: ScentMissionChatContext): Promise<string> {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+  // Key in a header, not the URL, so it can never leak through URL logging.
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY ?? "" },
     signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
     body: JSON.stringify({
       contents: [{ parts: [{ text: chatPrompt(context) }] }],

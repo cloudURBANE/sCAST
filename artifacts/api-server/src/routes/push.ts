@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { AuthRequest, requireAuth } from "../middlewares/auth";
 import { getTenantId } from "../middlewares/tenant";
+import { rateLimitMiddleware } from "../lib/rateLimit";
 import {
   clearBadge,
   deleteSubscription,
@@ -15,6 +16,30 @@ import {
 } from "../services/pushService";
 
 const router = Router();
+
+// /push/rotate is deliberately unauthenticated (the SW's pushsubscriptionchange
+// event has no bearer token), which makes it the one push route an anonymous
+// client can use to write to the DB. Rotation is rare — once per browser key
+// rotation — so a tight per-IP window costs real users nothing while capping
+// endpoint-guessing and write floods.
+const pushRotateRateLimit = rateLimitMiddleware({
+  name: "push-rotate",
+  limit: 10,
+  windowMs: 60_000,
+});
+
+// Browser push endpoints are always https URLs issued by the UA's push service.
+// Rejecting anything else keeps attacker-shaped strings (javascript:, data:,
+// internal http hosts, megabyte payloads) out of the subscriptions table — and
+// out of the web-push sender, which would otherwise POST to whatever is stored.
+function isValidPushEndpoint(endpoint: string): boolean {
+  if (endpoint.length > 2048) return false;
+  try {
+    return new URL(endpoint).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 // Public: the browser needs the VAPID public key to call pushManager.subscribe.
 // `configured: false` lets the SPA hide the notifications toggle when the server
@@ -33,7 +58,7 @@ router.post("/push/subscribe", requireAuth, async (req: AuthRequest, res) => {
   const endpoint = typeof body.endpoint === "string" ? body.endpoint.trim() : "";
   const p256dh = typeof body.keys?.p256dh === "string" ? body.keys.p256dh : "";
   const auth = typeof body.keys?.auth === "string" ? body.keys.auth : "";
-  if (!endpoint || !p256dh || !auth) {
+  if (!endpoint || !p256dh || !auth || !isValidPushEndpoint(endpoint)) {
     res.status(400).json({ error: "A valid push subscription (endpoint + keys) is required." });
     return;
   }
@@ -95,7 +120,7 @@ router.post("/push/badge/clear", requireAuth, async (req: AuthRequest, res) => {
 // Tokenless subscription rotation for the service worker's `pushsubscriptionchange`
 // event (the SW has no bearer token). Authorized by possession of the OLD
 // endpoint, which is unguessable and uniquely maps to one stored row.
-router.post("/push/rotate", async (req, res) => {
+router.post("/push/rotate", pushRotateRateLimit, async (req, res) => {
   const body = (req.body ?? {}) as {
     oldEndpoint?: unknown;
     endpoint?: unknown;
@@ -105,7 +130,7 @@ router.post("/push/rotate", async (req, res) => {
   const endpoint = typeof body.endpoint === "string" ? body.endpoint.trim() : "";
   const p256dh = typeof body.keys?.p256dh === "string" ? body.keys.p256dh : "";
   const auth = typeof body.keys?.auth === "string" ? body.keys.auth : "";
-  if (!oldEndpoint || !endpoint || !p256dh || !auth) {
+  if (!oldEndpoint || !endpoint || !p256dh || !auth || !isValidPushEndpoint(endpoint)) {
     res.status(400).json({ error: "oldEndpoint and a full new subscription (endpoint + keys) are required." });
     return;
   }

@@ -239,11 +239,17 @@ self.addEventListener("notificationclick", (event: NotificationEvent) => {
         }
       }
       
-      // 2. If no exact match, navigate the first client we can focus
+      // 2. If no exact match, navigate the first client we can focus. The
+      // navigate promise is part of the waitUntil chain — dropping it lets the
+      // browser suspend the SW mid-navigation. If navigation is refused (e.g.
+      // the client went away), fall back to opening a fresh window.
       for (const client of clientList) {
         if ("focus" in client && "navigate" in client) {
-          (client as WindowClient).navigate(targetUrl);
-          return (client as WindowClient).focus();
+          const win = client as WindowClient;
+          return win
+            .navigate(targetUrl)
+            .then(() => win.focus())
+            .catch(() => self.clients.openWindow(targetUrl));
         }
       }
       

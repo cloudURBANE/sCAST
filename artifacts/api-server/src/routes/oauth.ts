@@ -480,7 +480,7 @@ router.get("/auth/google/callback", oauthRateLimit, async (req, res) => {
     // C3: hand the SPA a single-use 60s code instead of the bearer token +
     // email in the redirect URL, so the live credential never lands in history,
     // Referer, or SPA-origin logs. The SPA POSTs it to /api/auth/exchange.
-    const handoffCode = mintHandoffCode({
+    const handoffCode = await mintHandoffCode({
       token: sessionToken,
       email: user.email,
       ...(pictureUrl ? { pictureUrl } : {}),
@@ -550,13 +550,13 @@ router.post("/auth/logout", oauthRateLimit, requireAuth, async (req: AuthRequest
  * leaked redirect URL is worthless. The token is returned in the response body,
  * never in a URL. A rate limit is applied at mount (routes/index.ts).
  */
-router.post("/auth/exchange", oauthRateLimit, (req, res) => {
+router.post("/auth/exchange", oauthRateLimit, async (req, res) => {
   const code = typeof req.body?.code === "string" ? req.body.code : "";
   if (!code) {
     res.status(400).json({ error: "Missing code" });
     return;
   }
-  const handoff = redeemHandoffCode(code);
+  const handoff = await redeemHandoffCode(code);
   if (!handoff) {
     res.status(401).json({ error: "Invalid or expired code" });
     return;
