@@ -369,22 +369,35 @@ html {
   content: none;
 }
 
-/* "Discover With Beam Agent" trigger — a quiet, auto-width ghost pill. The old
-   treatment was a full-width glass slab (blur, gold washes) that matched the
-   search input's box and made the top half read as two stacked primary
-   capsules. The agent entry is the secondary action, so it now reads as one:
-   a hairline pill hugging its label, no fill, no filter — the search input
-   keeps sole ownership of the strong gold up top. Depth-free by design;
-   hover/press feedback is border + text + a whisper of accent fill only
-   (never a projected gold pool — see $no-projected-gold-glow). The one-shot
-   mount sheen (below) is the pill's single flourish, brought back from the
-   glass era: a light sweep INSIDE the pill, clipped by overflow, not a glow
-   under it. */
+/* "Discover With Beam Agent" trigger — the flagship auto-width ghost pill. The
+   old treatment was a full-width glass slab (blur, gold washes) that matched
+   the search input's box and made the top half read as two stacked primary
+   capsules. The agent entry is the secondary action, so it reads as one:
+   a hairline pill hugging its label, no filter — the search input keeps sole
+   ownership of the strong gold up top. Presence comes from INSIDE the surface:
+   a faint gold veil breathing down from the top edge, a hairline rim light on
+   the inner top edge (inset — never a projected gold pool, see
+   $no-projected-gold-glow), and the recurring light sweep below, all clipped
+   by overflow. Hover/press feedback stays border + text + a whisper of accent
+   fill. */
 .scent-signature-cta {
   position: relative;
   overflow: hidden;
   border: 1px solid rgb(var(--scent-accent-rgb) / 0.3);
-  background: rgba(0, 0, 0, 0.35);
+  background-color: rgba(0, 0, 0, 0.35);
+  /* Interior gold veil: strongest at the top hairline, gone by two-thirds
+     down — dimensionality without competing with the search capsule above. */
+  background-image: linear-gradient(
+    180deg,
+    rgb(var(--scent-accent-rgb) / 0.08),
+    rgb(var(--scent-accent-rgb) / 0.03) 38%,
+    transparent 66%
+  );
+  /* Inset-only depth: top rim light + a breath of inner bottom shade. Both
+     live inside the pill, so nothing pools under the surface. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 247, 201, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
     background-color var(--scent-transition-base) var(--scent-ease-out),
@@ -398,12 +411,22 @@ html {
   z-index: 1;
 }
 
-/* One-shot gold light sweep that plays each time the CTA mounts (i.e. when the
-   discover state appears), echoing the brand/marquee gold-sheen. Animates the
+/* Gold light sweep, echoing the brand/marquee gold-sheen. Animates the
    pseudo-element's own transform only — never the button's — so it can't
    collide with the framer-motion enter/exit. Clipped to the pill by
    overflow:hidden above. Peaks a step quieter than the old glass-slab sweep so
-   it reads as a glint on a ghost pill, not a wash. */
+   it reads as a glint on a ghost pill, not a wash.
+
+   The sweep plays on mount (when the discover state appears) and then recurs
+   on a long, calm cycle: one ~2.35s pass per 8.4s period, idle in between, so
+   the pill reads as quietly alive rather than a one-and-done flash.
+
+   This runs on EVERY device class, phones and iPads included. The old
+   .scent-touch-perf / .scent-ipad-safari-perf display:none gate here was
+   inherited from the glass-slab era, when the sheen rode on a full-width
+   backdrop-blurred surface; on this small clipped pill the sweep is a single
+   transform+opacity layer with no filters, which is exactly the kind of motion
+   WebKit composites cheaply. prefers-reduced-motion remains the only gate. */
 .scent-signature-cta::after {
   content: "";
   position: absolute;
@@ -424,32 +447,28 @@ html {
 
 @media (prefers-reduced-motion: no-preference) {
   .scent-signature-cta::after {
-    animation: scent-cta-sheen 2.4s var(--scent-ease-out) 0.18s 1 both;
+    animation: scent-cta-sheen 8.4s var(--scent-ease-out) 0.18s infinite both;
   }
 }
 
+/* Sweep occupies the first 28% of the cycle (~2.35s, the original one-shot
+   tempo); the remaining 72% is idle hold so recurrences stay rare and calm. */
 @keyframes scent-cta-sheen {
   0% {
     transform: translateX(-130%);
     opacity: 0;
   }
-  16% {
+  4.5% {
     opacity: 1;
   }
-  84% {
+  23.5% {
     opacity: 1;
   }
+  28%,
   100% {
     transform: translateX(130%);
     opacity: 0;
   }
-}
-
-/* Constrained-renderer modes skip the sweep entirely — same gating the old
-   glass-era sheen carried (one fewer animated compositor layer on WebKit). */
-.scent-ipad-safari-perf .scent-signature-cta::after,
-.scent-touch-perf .scent-signature-cta::after {
-  display: none;
 }
 
 /* Hover effects are gated to hover-capable pointers: on touch, WebKit keeps
@@ -460,6 +479,10 @@ html {
     border-color: rgb(var(--scent-accent-rgb) / 0.55);
     background-color: rgb(var(--scent-accent-rgb) / 0.06);
     color: #fff7ec;
+    /* Rim light wakes up with the border — still inset-only. */
+    box-shadow:
+      inset 0 1px 0 rgba(255, 247, 201, 0.22),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -469,7 +492,12 @@ html {
 
 .scent-signature-cta:focus-visible {
   border-color: rgb(var(--scent-accent-rgb) / 0.6);
-  box-shadow: 0 0 0 2px rgba(255, 230, 163, 0.6);
+  /* Keyboard ring is an a11y affordance, not decoration; the inset rim rides
+     along so the pill keeps its depth while focused. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 247, 201, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3),
+    0 0 0 2px rgba(255, 230, 163, 0.6);
 }
 
 .scent-mission-action-slot {
