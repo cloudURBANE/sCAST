@@ -383,10 +383,10 @@ html {
 .scent-signature-cta {
   position: relative;
   overflow: hidden;
-  /* A step quieter than before (0.3): the ladder is search input (0.62) ≫
+  /* A step quieter again (0.24→0.2): the ladder is search input (0.53) ≫
      this pill ≫ passive panel frames, so the search field is unmistakably the
      primary action and Beam reads as the premium alternative, not a peer. */
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.24);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.2);
   background-color: rgba(0, 0, 0, 0.35);
   /* Interior gold veil: strongest at the top hairline, gone by two-thirds
      down — dimensionality without competing with the search capsule above. */
@@ -768,7 +768,7 @@ html {
      cards competing for attention"; letting the unselected days recede to bare
      date + glyph means ONLY the selected day carries a real frame, so the rail
      reads as one light strip with a single clear selection. */
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.05);
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.04);
   border-radius: 13px;
   background: linear-gradient(180deg, rgba(6, 6, 5, 0.6), rgba(0, 0, 0, 0.75) 100%);
   transition:
@@ -974,7 +974,10 @@ html {
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
   background: rgba(0, 0, 0, 0.88);
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.56);
+  /* ~15% quieter (0.56→0.48): the field should announce itself through its
+     shape and contrast, not primarily its gold outline (design review). It
+     stays the strongest resting border on the page. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.48);
   border-radius: var(--radius-scent);
   box-shadow: inset 0 1px 0 rgba(255, 226, 174, 0.06), inset 0 0 28px rgb(var(--scent-accent-rgb) / 0.025), 0 16px 34px -22px rgba(0, 0, 0, 0.9);
   transition:
@@ -997,8 +1000,9 @@ html {
     rgba(0, 0, 0, 0.92);
   /* One clean hairline — still the strongest gold in the search block (the
      primary action outranks its passive card frame), but no longer fighting
-     the old equally-bright outer card border. */
-  border-color: rgb(var(--scent-accent-rgb) / 0.62);
+     the old equally-bright outer card border. ~15% down from 0.62 in the
+     border-restraint pass. */
+  border-color: rgb(var(--scent-accent-rgb) / 0.53);
   box-shadow:
     inset 0 1px 0 rgba(255, 236, 183, 0.07),
     inset 0 0 28px rgb(var(--scent-accent-rgb) / 0.014),
@@ -1898,7 +1902,9 @@ html {
      ends rather than reading as a hard left/right crop on narrow screens. The
      floor is widened so a paused/at-rest marquee never exposes a partial word
      flush against either edge on phone widths. */
-  --hero-edge-fade: clamp(3.5rem, 9vw, 6rem);
+  /* Widened again so the looping text dissolves rather than visibly entering
+     or exiting — the band should read as atmosphere, not a clipped banner. */
+  --hero-edge-fade: clamp(4rem, 10vw, 6.5rem);
   -webkit-mask-image: linear-gradient(
     90deg,
     transparent 0,
@@ -1916,8 +1922,10 @@ html {
 }
 
 .scent-marquee-text {
-  color: rgba(255, 244, 225, 0.9);
-  text-shadow: 0 0 18px rgb(var(--scent-accent-rgb) / 0.22);
+  /* A touch more recessive (0.9→0.82 + softer halo): the ticker is ambient
+     data, one register below every real heading (design review). */
+  color: rgba(255, 244, 225, 0.82);
+  text-shadow: 0 0 18px rgb(var(--scent-accent-rgb) / 0.18);
 }
 
 /* Light theme: the literal cream above disappears into the light canvas, and a
@@ -1933,7 +1941,9 @@ html {
   width: max-content;
   gap: 0;
   font-size: clamp(12.5px, 0.82vw, 13.25px);
-  letter-spacing: 0.5em;
+  /* Tracking eased ~8% (0.5em→0.46em, explicitly requested): at 0.5em the
+     phrases read as a stretched banner rather than a controlled data layer. */
+  letter-spacing: 0.46em;
   text-transform: uppercase;
   font-family: "Iowan Old Style", "Times New Roman", serif;
   font-style: italic;
@@ -2025,11 +2035,12 @@ html {
 .scent-marquee-divider {
   flex-shrink: 0;
   align-self: center;
-  width: clamp(1rem, 2vw, 1.6rem);
+  /* Shorter + fainter dash — a subtle pause between phrases, not a rule. */
+  width: clamp(0.8rem, 1.6vw, 1.3rem);
   height: 1px;
   transform: translateY(0.06em);
   background: linear-gradient(90deg, rgb(var(--scent-accent-rgb) / 0), rgb(var(--scent-accent-rgb) / 0.55), rgb(var(--scent-accent-rgb) / 0));
-  opacity: 0.55;
+  opacity: 0.45;
 }
 
 /* Center-sheen key word/number in the hero ticker.
@@ -2298,7 +2309,8 @@ html {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
+  /* Label-to-value gap tightened ~2px so each metric reads as one unit. */
+  gap: 0.3rem;
   padding: 0.85rem 1rem;
   text-align: center;
 }
@@ -2320,7 +2332,9 @@ html {
 }
 
 .scent-weather-label {
-  color: rgba(224, 188, 86, 0.95);
+  /* Mid-tier gold (level 2 in the accent hierarchy) — labels are metadata,
+     not accents competing with the logo/selected states. */
+  color: rgba(224, 188, 86, 0.85);
   font-size: 0.66rem;
   font-weight: 700;
   letter-spacing: 0.2em;

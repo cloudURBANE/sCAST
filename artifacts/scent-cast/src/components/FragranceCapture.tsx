@@ -1289,7 +1289,7 @@ export const FragranceCapture: React.FC<{
         {/* mb lifted a step (was 1.5/4): with the hero card unboxed the
             headline→input distance is carried by this margin alone, and the
             frameless composition needs the extra air to group cleanly. */}
-        <header className="mx-auto mb-3 max-w-[43rem] px-1 text-center sm:mb-5">
+        <header className="mx-auto mb-2 max-w-[43rem] px-1 text-center sm:mb-4">
           <p className="sr-only">
             Add perfumes to your vault. Example fragrance names rotate above the search field.
           </p>
@@ -1363,7 +1363,11 @@ export const FragranceCapture: React.FC<{
               // long variant clipped mid-word ("…fragra") on phones.
               placeholder={searchFocused ? '' : 'Search fragrances...'}
               aria-label="Look up a brand or fragrance"
-              className="scent-lux-input scent-vault-search-input relative z-0 h-[56px] w-full text-center font-sans text-base font-medium text-foreground outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-medium sm:h-[64px] scroll-mt-28 px-16 sm:px-[4.35rem]"
+              // 56→50px (design review: the field was the most oversized
+              // element left on the phone canvas; 50px keeps a comfortable
+              // 44px+ tap height). Placeholder drops a weight step so it reads
+              // as an invitation, not CTA copy.
+              className="scent-lux-input scent-vault-search-input relative z-0 h-[50px] w-full text-center font-sans text-base font-medium text-foreground outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-normal sm:h-[60px] scroll-mt-28 px-16 sm:px-[4.35rem]"
             />
             <m.button
               type="submit"
@@ -1380,7 +1384,7 @@ export const FragranceCapture: React.FC<{
                 animate={reduceMotion || uploading ? undefined : { opacity: [0.74, 1, 0.74] }}
                 transition={reduceMotion || uploading ? undefined : { duration: 3.4, repeat: Infinity, ease: 'easeInOut' }}
               >
-                <Search size={18} strokeWidth={1.75} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.22)]" />
+                <Search size={18} strokeWidth={1.75} className="drop-shadow-[0_0_12px_rgba(212,175,55,0.16)]" />
               </m.span>
             </m.button>
           </form>

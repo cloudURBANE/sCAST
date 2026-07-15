@@ -515,12 +515,17 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
     locationText || 'location-missing',
   ].join('|');
   usePauseMarqueeWhenHidden(sectionRef, trackRef, atmosphereDisplayKey);
+  // Priority order for the scrolling band (design review): the trio that leads
+  // each loop — and therefore what a glance most often catches — should be the
+  // decision-relevant data (temperature, condition, location). Time is the least
+  // valuable metric in-app (the device status bar already shows it), so it rides
+  // last; nothing is removed.
   const metrics = [
+    { label: 'Temperature', value: temp },
     { label: 'Conditions', value: condition },
+    { label: 'Location', value: location },
     { label: 'Humidity', value: humidity },
     { label: 'Time', value: <LiveClock /> },
-    { label: 'Temperature', value: temp },
-    { label: 'Location', value: location },
   ];
 
   // Measure one looped copy and size the CSS keyframe distance/duration to it so
@@ -646,7 +651,7 @@ function HeroVaultContentFallback() {
   return (
     <div className="relative w-full min-w-0" aria-label="Loading fragrance search">
       <div className="mx-auto mb-6 h-24 max-w-[38rem] animate-pulse rounded-[var(--radius-scent)] bg-white/[0.035] sm:mb-7" />
-      <div className="scent-lux-input mx-auto h-[60px] w-full max-w-[42.75rem] animate-pulse rounded-[var(--radius-scent)] sm:h-[68px]" />
+      <div className="scent-lux-input mx-auto h-[50px] w-full max-w-[42.75rem] animate-pulse rounded-[var(--radius-scent)] sm:h-[60px]" />
     </div>
   );
 }
@@ -1140,7 +1145,12 @@ function DashboardView() {
             value — a full extra beat down the page. The tighter cadence keeps
             the modules reading as one composed column; phone rhythm
             (justify-between) is untouched. */}
-        <div className={`flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-4 pt-0 pb-[calc(var(--bottomnav-h)+1.5rem)] sm:min-h-0 sm:gap-6 sm:pt-0 sm:pb-0 lg:gap-8 ${agentActive ? '' : 'justify-between sm:justify-start'}`}>
+        {/* Phone gap tightened one more step (gap-4→gap-3) and the nav
+            clearance pared back (1.5rem→1rem): the design review's one
+            structural complaint left was total vertical height — the savings
+            come from the empty transitions between modules, not from the
+            modules themselves. */}
+        <div className={`flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-3 pt-0 pb-[calc(var(--bottomnav-h)+1rem)] sm:min-h-0 sm:gap-6 sm:pt-0 sm:pb-0 lg:gap-8 ${agentActive ? '' : 'justify-between sm:justify-start'}`}>
           {/* The hero ticker sits flush against the fixed top bar (no padding
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
@@ -1310,7 +1320,7 @@ function DashboardView() {
                 ref={signatureSectionRef}
                 layout={isMounted ? !calmLayout : false}
                 transition={vaultContentTransition}
-                className="scent-mission-action-slot mt-3 flex min-h-[46px] justify-center sm:mt-4 sm:min-h-[52px]"
+                className="scent-mission-action-slot mt-2 flex min-h-[44px] justify-center sm:mt-3 sm:min-h-[50px]"
               >
                 {/* Stable portal host for the Beam Agent cue / Confirm lane.
                     This element stays mounted for the whole time the action slot
@@ -1356,7 +1366,11 @@ function DashboardView() {
                       // duplicated the search input's box): the pill hugs its
                       // label so the gold input above stays the block's only
                       // full-width capsule. Height keeps the 44px+ tap target.
-                      className="scent-signature-cta group inline-flex h-[46px] items-center justify-center rounded-full px-7 text-[11.5px] font-bold uppercase tracking-[0.11em] text-scent-accent focus-visible:outline-none sm:h-[52px] sm:px-9 sm:text-[12.5px] sm:tracking-[0.14em]"
+                      // A notch smaller and less tracked than the last pass
+                      // (design review: the pill still sat too close to the
+                      // search field in visual weight) — height/padding/tracking
+                      // each step down one register; 44px keeps the tap target.
+                      className="scent-signature-cta group inline-flex h-[44px] items-center justify-center rounded-full px-6 text-[11.5px] font-bold uppercase tracking-[0.09em] text-scent-accent focus-visible:outline-none sm:h-[50px] sm:px-8 sm:text-[12.5px] sm:tracking-[0.12em]"
                       aria-label="Discover with Beam Agent"
                       title="Discover with Beam Agent"
                     >
@@ -1364,7 +1378,7 @@ function DashboardView() {
                           centers in the pill. The text-indent equals the
                           letter-spacing so the trailing tracking gap doesn't pull
                           the glyphs optically left of center. */}
-                      <span className="[text-indent:0.11em] sm:[text-indent:0.14em]">Discover With Beam Agent</span>
+                      <span className="[text-indent:0.09em] sm:[text-indent:0.12em]">Discover With Beam Agent</span>
                     </m.button>
                   )}
                 </AnimatePresence>

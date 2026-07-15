@@ -104,7 +104,11 @@ const AccountMenu: React.FC<AccountMenuProps> = ({
           // No gold halo radiating off the disc — the vault monogram sets the
           // precedent ("no projected gold halo around the disc"); the gold
           // hairline border carries the accent on its own.
-          className="flex h-11 w-11 items-center justify-center rounded-full border border-scent-accent/35 bg-black/35 transition-colors hover:border-scent-accent/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+          // Ring dimmed to exactly match the notification bell's (/30, same
+          // 44px diameter, same 1px hairline) so the two header controls read
+          // as one matched pair — the avatar photo is already busier than the
+          // bell, so its frame should not also be brighter.
+          className="flex h-11 w-11 items-center justify-center rounded-full border border-scent-accent/30 bg-black/35 transition-colors hover:border-scent-accent/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
           aria-label={t('account.menuLabel')}
         >
           <Avatar className="h-10 w-10 border border-white/10 bg-scent-surface">
@@ -414,7 +418,11 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
         {/* Opaque pill surface: content must never read through the bar. The
             near-solid warm-black (was bg-black/66) is what makes the overlap
             land as a clean tab bar instead of competing layers. */}
-        <div className={`mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/16 bg-[rgba(8,6,4,0.94)] p-1 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.1)]${lowRenderBudget ? '' : ' backdrop-blur-md'}`}>
+        {/* p-1→p-0.5 shaves ~4px off the bar's height, and the container
+            border steps below the forecast card's in the outline hierarchy
+            (nav chrome should be quieter than the content it floats over).
+            The three equal-width segments keep the 44px+ item tap height. */}
+        <div className={`mx-auto grid max-w-sm grid-cols-3 rounded-full border border-scent-accent/12 bg-[rgba(8,6,4,0.94)] p-0.5 shadow-[0_18px_48px_rgba(0,0,0,0.58),inset_0_1px_0_rgba(255,236,183,0.1)]${lowRenderBudget ? '' : ' backdrop-blur-md'}`}>
           {navItems.map((item) => {
             const Icon = item.icon;
             return (

@@ -507,7 +507,7 @@ export function NotificationFeed() {
       <Popover open={isOpen} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <button type="button" className={triggerClassName} aria-label={triggerLabel}>
-            <Bell size={18} className="text-[#f4debd]/85 transition-colors" />
+            <Bell size={17} strokeWidth={1.6} className="text-[#f4debd]/85 transition-colors" />
             {unreadBadge}
           </button>
         </PopoverTrigger>
@@ -526,7 +526,7 @@ export function NotificationFeed() {
     <Drawer open={isOpen} onOpenChange={handleOpenChange}>
       <DrawerTrigger asChild>
         <button type="button" className={triggerClassName} aria-label={triggerLabel}>
-          <Bell size={18} className="text-[#f4debd]/85 transition-colors" />
+          <Bell size={17} strokeWidth={1.6} className="text-[#f4debd]/85 transition-colors" />
           {unreadBadge}
         </button>
       </DrawerTrigger>
