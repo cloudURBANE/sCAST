@@ -23,3 +23,5 @@ export * from "./arenaCrowdPredictions";
 export * from "./arenaCrowdStats";
 export * from "./arenaBeamGrants";
 export * from "./inAppNotifications";
+export * from "./conversations";
+export * from "./messages";

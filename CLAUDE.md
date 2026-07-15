@@ -144,7 +144,7 @@ The `codegen` script runs Orval and then `pnpm -w run typecheck:libs` (root-leve
 - `image_cache` — processed image metadata: source URL hash, storage path, content hash, bg-removal status
 - `user_settings`, `affiliate_links`
 
-Note: `conversations.ts` and `messages.ts` exist on disk under `lib/db/src/schema/` but are **not** re-exported from `index.ts` and are not currently part of the runtime schema surface.
+Note: `conversations.ts` and `messages.ts` (the `beam_conversations` / `beam_messages` durable Beam-transcript store, W-11) are now re-exported from `index.ts` and part of the runtime schema surface. They back `services/beamConversationStore.ts` (durable persistence + reload behind the Redis session hot path) and migration `0003_beam_conversations.sql`.
 
 Drizzle config (`drizzle.config.ts`) declares its schema as the glob `./src/schema/*.ts`. The glob lives in the TS config (not the `package.json` script) so `drizzle-kit push` works on Windows shells that don't expand globs.
 

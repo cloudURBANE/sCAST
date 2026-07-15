@@ -50,6 +50,7 @@ import {
   recordBeamAnswerFeedback,
   recordBeamAnswerLog,
 } from "../services/beamAnswerLog";
+import { loadBeamConversationHistory, persistBeamConversationTurn } from "../services/beamConversationStore";
 import { enqueueBeamCuration } from "../services/curationService";
 import { fetchEngineEnrichmentState } from "../services/enrichmentProcessor";
 import { createBeamTools, type BeamCatalogHit, type BeamToolDeps } from "./beamTools.ts";
@@ -611,7 +612,13 @@ router.post("/runs", runRateLimit, requireAuth, async (req: AuthRequest, res) =>
     synthesisMaxTokens: budget.synthesisMaxTokens,
     history,
     sessionState,
-    onComplete: (assistantText) => appendSessionTurn(ctx, message, assistantText, sessionState),
+    onComplete: (assistantText) => {
+      // Hot path: Redis/in-memory session memory (1h TTL) the loop reads each turn.
+      void appendSessionTurn(ctx, message, assistantText, sessionState);
+      // Durable path (W-11): survives TTL expiry / restart, reloadable via
+      // GET /conversations/:sessionId. Best-effort — never blocks or fails the run.
+      void persistBeamConversationTurn({ ctx, userMessage: message, assistantText });
+    },
     onSummary: (summary) => {
       // Coarse, non-PII scenario label for the observatory feed.
       const scenario =
@@ -1024,6 +1031,29 @@ router.get("/observatory/feed", (req, res) => {
     ...(Number.isFinite(parsedLimit) ? { limit: parsedLimit } : {}),
   });
   res.status(feed.status === "unauthorized" ? 401 : 200).json(feed);
+});
+
+/**
+ * GET /conversations/:sessionId — reload the durable transcript for a session.
+ *
+ * Scoped to the caller (`requireAuth` + a `user_id` filter in the store), so a
+ * user can only read their own thread. Returns the most recent turns as ordered
+ * `{ role, content }` pairs; `[]` when nothing is persisted yet, the table is
+ * missing (pre-migration), or the session belongs to someone else. This is the
+ * server surface the SPA rehydrates from after a reload (W-11 follow-up).
+ */
+router.get("/conversations/:sessionId", requireAuth, async (req: AuthRequest, res) => {
+  if (!req.user) {
+    res.status(401).json({ error: "Authentication required", code: "unauthorized" });
+    return;
+  }
+  const sessionId = String(req.params.sessionId ?? "").trim();
+  if (!sessionId) {
+    res.status(400).json({ error: "sessionId is required", code: "missing_session_id" });
+    return;
+  }
+  const turns = await loadBeamConversationHistory({ userId: req.user.id, sessionId });
+  res.status(200).json({ sessionId, turns });
 });
 
 export const beamAgentRouter = router;

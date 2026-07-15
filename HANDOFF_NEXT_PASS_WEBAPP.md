@@ -59,9 +59,13 @@ audits) and `docs/beam-agent/09-production-readiness-plan.md` (Beam Agent prod-r
 > - **W-9 ✅** `CommentThread.tsx` builds a nested tree from `parentCommentId`
 >   (`buildCommentTree`) with per-node reply.
 > - **W-10 ✅** `pwa/PushPrompt.tsx` consent banner calls `subscribeToPush(authToken)`.
-> - **W-11 ⏸ still deferred by design** — `conversations`/`messages` remain
->   off-runtime-schema and tenant-unscoped; the card only applies **if** persistence
->   is built. Nothing to do until then.
+> - **W-11 ✅ backend landed** — `conversations`/`messages` are now the tenant/user-scoped
+>   `beam_conversations` / `beam_messages` tables (migration `0003_beam_conversations.sql`),
+>   re-exported in the barrel, backing `services/beamConversationStore.ts` (durable persist +
+>   scoped `GET /api/beam-agent/conversations/:sessionId` reload) dual-written behind the Redis
+>   session hot path. **Remaining follow-up:** the SPA still holds `sessionId` in React state only
+>   (`ScentMissionPanel.tsx`) — persist it + rehydrate the transcript from the reload endpoint on
+>   mount to make history survive a page reload end-to-end.
 > - **W-12 ✅** producer (`routes/fragrances.ts` → `enqueueEnrichmentJob`) and worker
 >   (`index.ts` → `startEnrichmentWorker`) are wired, each behind an env flag
 >   defaulting OFF (`ENRICHMENT_QUEUE_ENABLED` / `ENRICHMENT_WORKER_ENABLED`).
@@ -208,14 +212,19 @@ deferred-image placeholder+polling (`WardrobeContext.tsx`), arena battles (`aren
   reuse W-1's `--mobile-nav-offset` positioning and decide which banner wins. Auto-send triggers are
   separate backend work, out of scope. Full card: `SCENTBEAM_REMEDIATION_PLAN.md#p-34`.
 
-### W-11 · Conversations/messages tenant-scoping 🟣 (Subagent REQUIRED — security-sensitive)
+### W-11 · Conversations/messages tenant-scoping ✅ backend done (SPA rehydrate = follow-up)
 - **Skills:** `db-schema-safety`
-- **What/why:** `conversations`/`messages` are the **only two** off-runtime schema files (not
-  re-exported in `lib/db/src/schema/index.ts`) and have **no `userId`/`tenantId`**.
-  `services/scentMissionService.ts` documents the deliberate deferral. Wiring persistence as-is =
-  cross-tenant read/write of chat threads. **Only if building persistence:** add `tenantId`/`userId`
-  FKs (+ indexes) from the start (mirror `pushSubscriptions.ts`), re-export, then wire
-  `/api/scent-mission`. Confirm both names are in `tablesFilter` before any push (shared prod DB).
+- **Shipped:** rewrote `conversations`/`messages` as `beam_conversations` / `beam_messages` —
+  uuid PKs, `tenantId`/`userId` FKs (cascade), unique `(user_id, session_id)` upsert index, per-turn
+  `seq`. Re-exported in the barrel (so both are in `tablesFilter`), migration
+  `0003_beam_conversations.sql`. `services/beamConversationStore.ts` (+ pure `beamConversationCore.ts`,
+  tested) dual-writes each turn behind the Redis session store and exposes a caller-scoped
+  `GET /api/beam-agent/conversations/:sessionId` reload. Writes are best-effort/42P01-tolerant like
+  `beamAnswerLog`; reads fail closed to `[]` and filter on `user_id`, so no cross-tenant read/write.
+- **Remaining follow-up (SPA):** `ScentMissionPanel.tsx` keeps `sessionId` in React state only, so a
+  page reload starts a fresh thread. Persist the beam `sessionId` (localStorage) and rehydrate the
+  `PanelMessage[]` transcript from the reload endpoint on mount to close the loop end-to-end. This is
+  a UI change to a 3.4k-line component — its own careful pass, not bundled here.
 - Full card: `SCENTBEAM_REMEDIATION_PLAN.md#b-21`.
 
 ### W-12 · Enrichment queue producer + worker 🟣 (Subagent REQUIRED)
