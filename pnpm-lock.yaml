@@ -99,11 +99,11 @@ importers:
         specifier: ^3.9.5
         version: 3.9.5
       typescript:
-        specifier: ~5.9.2
-        version: 5.9.3
+        specifier: ~6.0.3
+        version: 6.0.3
       typescript-eslint:
         specifier: ^8.63.0
-        version: 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)
+        version: 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
 
   artifacts/api-server:
     dependencies:
@@ -600,7 +600,7 @@ importers:
     devDependencies:
       orval:
         specifier: ^8.20.0
-        version: 8.20.0(prettier@3.9.5)(typescript@5.9.3)
+        version: 8.20.0(prettier@3.9.5)(typescript@6.0.3)
 
   lib/api-zod:
     dependencies:
@@ -1228,11 +1228,11 @@ packages:
 
   '@esbuild-kit/core-utils@3.3.2':
     resolution: {integrity: sha512-sPRAnw9CdSsRmEtnsl2WXWdyquogVpB3yZ3dgwJfe8zrOzTsV7cJvmwrKVa+0ma5BoiGJ+BoqkMvawbayKUsqQ==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild-kit/esm-loader@2.6.5':
     resolution: {integrity: sha512-FxEMIkJKnodyA1OaCUoEvbYRkoZlLZ4d/eXFu9Fh8CbBBgP5EmZxrfTRyN0qpXZ4vOvqnE5YdRdcrmUUXuU+dA==}
-    deprecated: 'Merged into tsx: https://tsx.is'
+    deprecated: 'Merged into tsx: https://tsx.hirok.io'
 
   '@esbuild/aix-ppc64@0.25.12':
     resolution: {integrity: sha512-Hhmwd6CInZ3dwpuGTF8fJG6yoWmsToE+vYgD4nytZVxcu1ulHpUQRAB1UJ8+N1Am3Mz4+xOByoQoSZf4D+CpkA==}
@@ -6863,8 +6863,8 @@ packages:
       eslint: ^8.57.0 || ^9.0.0 || ^10.0.0
       typescript: '>=4.8.4 <6.1.0'
 
-  typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+  typescript@6.0.3:
+    resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
     hasBin: true
 
@@ -8774,23 +8774,23 @@ snapshots:
 
   '@opentelemetry/semantic-conventions@1.42.0': {}
 
-  '@orval/angular@8.20.0(typescript@5.9.3)':
+  '@orval/angular@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
     transitivePeerDependencies:
       - '@faker-js/faker'
       - supports-color
       - typescript
 
-  '@orval/axios@8.20.0(typescript@5.9.3)':
+  '@orval/axios@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
     transitivePeerDependencies:
       - '@faker-js/faker'
       - supports-color
       - typescript
 
-  '@orval/core@8.20.0(typescript@5.9.3)':
+  '@orval/core@8.20.0(typescript@6.0.3)':
     dependencies:
       '@scalar/openapi-types': 0.8.0
       acorn: 8.17.0
@@ -8802,88 +8802,88 @@ snapshots:
       jiti: 2.7.0
       remeda: 2.39.0
       tinyglobby: 0.2.17
-      typedoc: 0.28.20(typescript@5.9.3)
+      typedoc: 0.28.20(typescript@6.0.3)
     transitivePeerDependencies:
       - supports-color
       - typescript
 
-  '@orval/effect@8.20.0(typescript@5.9.3)':
+  '@orval/effect@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
       remeda: 2.39.0
     transitivePeerDependencies:
       - '@faker-js/faker'
       - supports-color
       - typescript
 
-  '@orval/fetch@8.20.0(typescript@5.9.3)':
+  '@orval/fetch@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
     transitivePeerDependencies:
       - '@faker-js/faker'
       - supports-color
       - typescript
 
-  '@orval/hono@8.20.0(typescript@5.9.3)':
+  '@orval/hono@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
-      '@orval/zod': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
+      '@orval/zod': 8.20.0(typescript@6.0.3)
       fs-extra: 11.3.6
     optionalDependencies:
-      typescript: 5.9.3
+      typescript: 6.0.3
     transitivePeerDependencies:
       - '@faker-js/faker'
       - supports-color
 
-  '@orval/mcp@8.20.0(typescript@5.9.3)':
+  '@orval/mcp@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
-      '@orval/fetch': 8.20.0(typescript@5.9.3)
-      '@orval/zod': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
+      '@orval/fetch': 8.20.0(typescript@6.0.3)
+      '@orval/zod': 8.20.0(typescript@6.0.3)
     transitivePeerDependencies:
       - '@faker-js/faker'
       - supports-color
       - typescript
 
-  '@orval/mock@8.20.0(typescript@5.9.3)':
+  '@orval/mock@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
       remeda: 2.39.0
     transitivePeerDependencies:
       - '@faker-js/faker'
       - supports-color
       - typescript
 
-  '@orval/query@8.20.0(typescript@5.9.3)':
+  '@orval/query@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
-      '@orval/fetch': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
+      '@orval/fetch': 8.20.0(typescript@6.0.3)
       remeda: 2.39.0
     transitivePeerDependencies:
       - '@faker-js/faker'
       - supports-color
       - typescript
 
-  '@orval/solid-start@8.20.0(typescript@5.9.3)':
+  '@orval/solid-start@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
     transitivePeerDependencies:
       - '@faker-js/faker'
       - supports-color
       - typescript
 
-  '@orval/swr@8.20.0(typescript@5.9.3)':
+  '@orval/swr@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
-      '@orval/fetch': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
+      '@orval/fetch': 8.20.0(typescript@6.0.3)
     transitivePeerDependencies:
       - '@faker-js/faker'
       - supports-color
       - typescript
 
-  '@orval/zod@8.20.0(typescript@5.9.3)':
+  '@orval/zod@8.20.0(typescript@6.0.3)':
     dependencies:
-      '@orval/core': 8.20.0(typescript@5.9.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
       remeda: 2.39.0
     transitivePeerDependencies:
       - '@faker-js/faker'
@@ -10248,40 +10248,40 @@ snapshots:
       '@types/node': 26.1.1
     optional: true
 
-  '@typescript-eslint/eslint-plugin@8.63.0(@typescript-eslint/parser@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3))(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)':
+  '@typescript-eslint/eslint-plugin@8.63.0(@typescript-eslint/parser@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
       '@eslint-community/regexpp': 4.12.2
-      '@typescript-eslint/parser': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/parser': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/scope-manager': 8.63.0
-      '@typescript-eslint/type-utils': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/type-utils': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
+      '@typescript-eslint/utils': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
       '@typescript-eslint/visitor-keys': 8.63.0
       eslint: 10.6.0(jiti@2.7.0)
       ignore: 7.0.5
       natural-compare: 1.4.0
-      ts-api-utils: 2.5.0(typescript@5.9.3)
-      typescript: 5.9.3
+      ts-api-utils: 2.5.0(typescript@6.0.3)
+      typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/parser@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)':
+  '@typescript-eslint/parser@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
       '@typescript-eslint/scope-manager': 8.63.0
       '@typescript-eslint/types': 8.63.0
-      '@typescript-eslint/typescript-estree': 8.63.0(typescript@5.9.3)
+      '@typescript-eslint/typescript-estree': 8.63.0(typescript@6.0.3)
       '@typescript-eslint/visitor-keys': 8.63.0
       debug: 4.4.3
       eslint: 10.6.0(jiti@2.7.0)
-      typescript: 5.9.3
+      typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/project-service@8.63.0(typescript@5.9.3)':
+  '@typescript-eslint/project-service@8.63.0(typescript@6.0.3)':
     dependencies:
-      '@typescript-eslint/tsconfig-utils': 8.63.0(typescript@5.9.3)
+      '@typescript-eslint/tsconfig-utils': 8.63.0(typescript@6.0.3)
       '@typescript-eslint/types': 8.63.0
       debug: 4.4.3
-      typescript: 5.9.3
+      typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
 
@@ -10290,47 +10290,47 @@ snapshots:
       '@typescript-eslint/types': 8.63.0
       '@typescript-eslint/visitor-keys': 8.63.0
 
-  '@typescript-eslint/tsconfig-utils@8.63.0(typescript@5.9.3)':
+  '@typescript-eslint/tsconfig-utils@8.63.0(typescript@6.0.3)':
     dependencies:
-      typescript: 5.9.3
+      typescript: 6.0.3
 
-  '@typescript-eslint/type-utils@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)':
+  '@typescript-eslint/type-utils@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
       '@typescript-eslint/types': 8.63.0
-      '@typescript-eslint/typescript-estree': 8.63.0(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/typescript-estree': 8.63.0(typescript@6.0.3)
+      '@typescript-eslint/utils': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
       debug: 4.4.3
       eslint: 10.6.0(jiti@2.7.0)
-      ts-api-utils: 2.5.0(typescript@5.9.3)
-      typescript: 5.9.3
+      ts-api-utils: 2.5.0(typescript@6.0.3)
+      typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
 
   '@typescript-eslint/types@8.63.0': {}
 
-  '@typescript-eslint/typescript-estree@8.63.0(typescript@5.9.3)':
+  '@typescript-eslint/typescript-estree@8.63.0(typescript@6.0.3)':
     dependencies:
-      '@typescript-eslint/project-service': 8.63.0(typescript@5.9.3)
-      '@typescript-eslint/tsconfig-utils': 8.63.0(typescript@5.9.3)
+      '@typescript-eslint/project-service': 8.63.0(typescript@6.0.3)
+      '@typescript-eslint/tsconfig-utils': 8.63.0(typescript@6.0.3)
       '@typescript-eslint/types': 8.63.0
       '@typescript-eslint/visitor-keys': 8.63.0
       debug: 4.4.3
       minimatch: 10.2.5
       semver: 7.8.5
       tinyglobby: 0.2.15
-      ts-api-utils: 2.5.0(typescript@5.9.3)
-      typescript: 5.9.3
+      ts-api-utils: 2.5.0(typescript@6.0.3)
+      typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
 
-  '@typescript-eslint/utils@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)':
+  '@typescript-eslint/utils@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)':
     dependencies:
       '@eslint-community/eslint-utils': 4.9.1(eslint@10.6.0(jiti@2.7.0))
       '@typescript-eslint/scope-manager': 8.63.0
       '@typescript-eslint/types': 8.63.0
-      '@typescript-eslint/typescript-estree': 8.63.0(typescript@5.9.3)
+      '@typescript-eslint/typescript-estree': 8.63.0(typescript@6.0.3)
       eslint: 10.6.0(jiti@2.7.0)
-      typescript: 5.9.3
+      typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
 
@@ -12753,21 +12753,21 @@ snapshots:
       type-check: 0.4.0
       word-wrap: 1.2.5
 
-  orval@8.20.0(prettier@3.9.5)(typescript@5.9.3):
+  orval@8.20.0(prettier@3.9.5)(typescript@6.0.3):
     dependencies:
       '@commander-js/extra-typings': 15.0.0(commander@15.0.0)
-      '@orval/angular': 8.20.0(typescript@5.9.3)
-      '@orval/axios': 8.20.0(typescript@5.9.3)
-      '@orval/core': 8.20.0(typescript@5.9.3)
-      '@orval/effect': 8.20.0(typescript@5.9.3)
-      '@orval/fetch': 8.20.0(typescript@5.9.3)
-      '@orval/hono': 8.20.0(typescript@5.9.3)
-      '@orval/mcp': 8.20.0(typescript@5.9.3)
-      '@orval/mock': 8.20.0(typescript@5.9.3)
-      '@orval/query': 8.20.0(typescript@5.9.3)
-      '@orval/solid-start': 8.20.0(typescript@5.9.3)
-      '@orval/swr': 8.20.0(typescript@5.9.3)
-      '@orval/zod': 8.20.0(typescript@5.9.3)
+      '@orval/angular': 8.20.0(typescript@6.0.3)
+      '@orval/axios': 8.20.0(typescript@6.0.3)
+      '@orval/core': 8.20.0(typescript@6.0.3)
+      '@orval/effect': 8.20.0(typescript@6.0.3)
+      '@orval/fetch': 8.20.0(typescript@6.0.3)
+      '@orval/hono': 8.20.0(typescript@6.0.3)
+      '@orval/mcp': 8.20.0(typescript@6.0.3)
+      '@orval/mock': 8.20.0(typescript@6.0.3)
+      '@orval/query': 8.20.0(typescript@6.0.3)
+      '@orval/solid-start': 8.20.0(typescript@6.0.3)
+      '@orval/swr': 8.20.0(typescript@6.0.3)
+      '@orval/zod': 8.20.0(typescript@6.0.3)
       '@scalar/json-magic': 0.12.17
       '@scalar/openapi-parser': 0.28.8
       '@scalar/openapi-types': 0.8.0
@@ -12781,9 +12781,9 @@ snapshots:
       js-yaml: 4.2.0
       remeda: 2.39.0
       string-argv: 0.3.2
-      typedoc: 0.28.20(typescript@5.9.3)
-      typedoc-plugin-coverage: 4.0.3(typedoc@0.28.20(typescript@5.9.3))
-      typedoc-plugin-markdown: 4.12.0(typedoc@0.28.20(typescript@5.9.3))
+      typedoc: 0.28.20(typescript@6.0.3)
+      typedoc-plugin-coverage: 4.0.3(typedoc@0.28.20(typescript@6.0.3))
+      typedoc-plugin-markdown: 4.12.0(typedoc@0.28.20(typescript@6.0.3))
     optionalDependencies:
       prettier: 3.9.5
     transitivePeerDependencies:
@@ -13930,9 +13930,9 @@ snapshots:
 
   tree-kill@1.2.2: {}
 
-  ts-api-utils@2.5.0(typescript@5.9.3):
+  ts-api-utils@2.5.0(typescript@6.0.3):
     dependencies:
-      typescript: 5.9.3
+      typescript: 6.0.3
 
   tslib@1.14.1: {}
 
@@ -14002,35 +14002,35 @@ snapshots:
     dependencies:
       is-typedarray: 1.0.0
 
-  typedoc-plugin-coverage@4.0.3(typedoc@0.28.20(typescript@5.9.3)):
+  typedoc-plugin-coverage@4.0.3(typedoc@0.28.20(typescript@6.0.3)):
     dependencies:
-      typedoc: 0.28.20(typescript@5.9.3)
+      typedoc: 0.28.20(typescript@6.0.3)
 
-  typedoc-plugin-markdown@4.12.0(typedoc@0.28.20(typescript@5.9.3)):
+  typedoc-plugin-markdown@4.12.0(typedoc@0.28.20(typescript@6.0.3)):
     dependencies:
-      typedoc: 0.28.20(typescript@5.9.3)
+      typedoc: 0.28.20(typescript@6.0.3)
 
-  typedoc@0.28.20(typescript@5.9.3):
+  typedoc@0.28.20(typescript@6.0.3):
     dependencies:
       '@gerrit0/mini-shiki': 3.23.0
       lunr: 2.3.9
       markdown-it: 14.3.0
       minimatch: 10.2.5
-      typescript: 5.9.3
+      typescript: 6.0.3
       yaml: 2.9.0
 
-  typescript-eslint@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3):
+  typescript-eslint@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3):
     dependencies:
-      '@typescript-eslint/eslint-plugin': 8.63.0(@typescript-eslint/parser@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3))(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)
-      '@typescript-eslint/parser': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)
-      '@typescript-eslint/typescript-estree': 8.63.0(typescript@5.9.3)
-      '@typescript-eslint/utils': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@5.9.3)
+      '@typescript-eslint/eslint-plugin': 8.63.0(@typescript-eslint/parser@8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
+      '@typescript-eslint/parser': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
+      '@typescript-eslint/typescript-estree': 8.63.0(typescript@6.0.3)
+      '@typescript-eslint/utils': 8.63.0(eslint@10.6.0(jiti@2.7.0))(typescript@6.0.3)
       eslint: 10.6.0(jiti@2.7.0)
-      typescript: 5.9.3
+      typescript: 6.0.3
     transitivePeerDependencies:
       - supports-color
 
-  typescript@5.9.3: {}
+  typescript@6.0.3: {}
 
   uc.micro@2.1.0: {}
 
