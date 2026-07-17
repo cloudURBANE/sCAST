@@ -129,6 +129,12 @@ export function parseScentMissionRequest(body: unknown): ParsedScentMissionReque
       context: {
         weather: sanitizeScentMissionWeather(context.weather),
         wardrobe: sanitizeScentMissionWardrobe(context.wardrobe),
+        wardrobeAvailability: {
+          enabled:
+            typeof context.wardrobeAvailability === "object" &&
+            context.wardrobeAvailability !== null &&
+            (context.wardrobeAvailability as Record<string, unknown>).enabled === true,
+        },
       },
     },
   };
@@ -423,6 +429,7 @@ async function executeNode(
   mission: ScentMissionState,
   wardrobe: ScentMissionWardrobeItem[],
   weather: ScentMissionWeather,
+  withMeEnabled: boolean,
   deps: ScentMissionServiceDeps,
 ): Promise<NodeExecutionResult> {
   switch (nodeId) {
@@ -449,8 +456,9 @@ async function executeNode(
           nodes: { ...mission.nodes, "wardrobe-sync": "blocked" },
         };
         return {
-          assistantMessage:
-            "Your collection's empty, so there's nothing for me to work with yet. Add a few fragrances from search and I'll pick from them.",
+          assistantMessage: withMeEnabled
+            ? "With Me is active, but no bottles are selected. Add a bottle to With Me or switch back to your full Vault, and I'll pick from what's available."
+            : "Your collection's empty, so there's nothing for me to work with yet. Add a few fragrances from search and I'll pick from them.",
           nodeUpdates: diffScentMissionNodes(mission, next),
         };
       }
@@ -483,8 +491,9 @@ async function executeNode(
           nodes: { ...mission.nodes, "resolution-standard": "blocked" },
         };
         return {
-          assistantMessage:
-            "I can't pick a match from an empty collection. Add a few fragrances and I'll choose from them.",
+          assistantMessage: withMeEnabled
+            ? "I can't pick an owned match because With Me is active with no bottles selected. Add one there or switch back to your full Vault."
+            : "I can't pick a match from an empty collection. Add a few fragrances and I'll choose from them.",
           nodeUpdates: diffScentMissionNodes(mission, next),
         };
       }
@@ -545,12 +554,16 @@ export async function executeScentMission(
   opts: {
     /** Wardrobe loaded from the DB for a signed-in user; overrides client-sent items. */
     serverWardrobe?: ScentMissionWardrobeItem[];
+    /** Server-authoritative availability mode paired with serverWardrobe. */
+    serverWardrobeAvailability?: { enabled: boolean };
     deps?: ScentMissionServiceDeps;
   } = {},
 ): Promise<ScentMissionResponse> {
   const deps = opts.deps ?? {};
   const sessionId = request.sessionId ?? randomUUID();
   const wardrobe = opts.serverWardrobe ?? request.context.wardrobe ?? [];
+  const withMeEnabled =
+    opts.serverWardrobeAvailability?.enabled ?? request.context.wardrobeAvailability?.enabled === true;
   const weather = request.context.weather ?? {};
 
   if (request.action === "execute_node") {
@@ -561,7 +574,7 @@ export async function executeScentMission(
         assistantMessage: lockedNodeMessage(nodeId, request.mission.nodes[nodeId]),
       };
     }
-    const result = await executeNode(nodeId, request.mission, wardrobe, weather, deps);
+    const result = await executeNode(nodeId, request.mission, wardrobe, weather, withMeEnabled, deps);
     return { sessionId, ...result };
   }
 

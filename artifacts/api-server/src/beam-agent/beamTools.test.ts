@@ -354,6 +354,89 @@ test("beam_get_user_context summarizes vault + weather", async () => {
   assert.equal(result.weather.location, "Forney, TX");
 });
 
+test("With Me narrows retrieval and scoring without changing full ownership context", async () => {
+  const availableItem = {
+    id: "v2",
+    name: "Aventus",
+    brand: "Creed",
+    families: ["fruity"],
+    accords: ["smoky"],
+  };
+  let scoredIds: string[] = [];
+  const tools = toolMap(makeDeps({
+    loadAvailableVault: async () => ({ enabled: true, totalCount: 2, items: [availableItem] }),
+    loadAvailableWardrobePackets: async () => ({
+      enabled: true,
+      totalCount: 2,
+      items: [{
+        fragranceId: "v2",
+        canonicalName: "Aventus",
+        brand: "Creed",
+        owned: true,
+        notes: { top: ["pineapple"], middle: ["birch"], base: ["musk"] },
+        accords: ["fruity", "smoky"],
+        performance: {},
+        sourceConfidence: 0.95,
+        missingFields: [],
+      }],
+    }),
+    rankVault: (items) => {
+      scoredIds = items.map((item) => item.id);
+      return items.map((item) => ({
+        fragranceId: item.id,
+        name: item.name,
+        brand: item.brand,
+        engine: {} as never,
+        reason: "available now",
+        score: 90,
+      }));
+    },
+  }));
+
+  const context = (await tools.get("beam_get_user_context")!.handler({}, CTX)) as {
+    wardrobeSummary: { count: number };
+    withMeSummary: { enabled: boolean; count: number };
+  };
+  assert.equal(context.wardrobeSummary.count, 2);
+  assert.deepEqual(context.withMeSummary, { enabled: true, count: 1 });
+
+  const wardrobe = (await tools.get("beam_get_wardrobe")!.handler({}, CTX)) as {
+    scope: string;
+    count: number;
+    totalOwnedCount: number;
+    items: Array<{ canonicalName: string }>;
+  };
+  assert.equal(wardrobe.scope, "with_me");
+  assert.equal(wardrobe.count, 1);
+  assert.equal(wardrobe.totalOwnedCount, 2);
+  assert.equal(wardrobe.items[0]?.canonicalName, "Aventus");
+
+  const scored = (await tools.get("beam_score_candidates")!.handler({}, CTX)) as { scope: string };
+  assert.equal(scored.scope, "with_me");
+  assert.deepEqual(scoredIds, ["v2"]);
+});
+
+test("an active empty With Me set does not fall back to the full vault", async () => {
+  const tools = toolMap(makeDeps({
+    loadAvailableVault: async () => ({ enabled: true, totalCount: 2, items: [] }),
+    loadAvailableWardrobePackets: async () => ({ enabled: true, totalCount: 2, items: [] }),
+  }));
+  const wardrobe = (await tools.get("beam_get_wardrobe")!.handler({}, CTX)) as {
+    scope: string;
+    count: number;
+    totalOwnedCount: number;
+  };
+  assert.deepEqual(wardrobe, { scope: "with_me", count: 0, totalOwnedCount: 2, items: [] });
+  const scored = (await tools.get("beam_score_candidates")!.handler({}, CTX)) as {
+    recommendation: unknown;
+    note: string;
+    scope: string;
+  };
+  assert.equal(scored.recommendation, null);
+  assert.equal(scored.scope, "with_me");
+  assert.match(scored.note, /no bottles are selected/i);
+});
+
 test("beam_search_catalog requires a query and honors excludeOwned", async () => {
   const tools = toolMap(makeDeps());
   const empty = (await tools.get("beam_search_catalog")!.handler({}, CTX)) as { items: unknown[] };

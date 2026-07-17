@@ -19,6 +19,8 @@ import {
   type ScentMissionChatFn,
   type ScentMissionServiceDeps,
 } from "../services/scentMissionService";
+import { scopeRowsWithMe } from "../services/withMeCore";
+import { loadWithMeState } from "../services/withMeWardrobe";
 
 const router = Router();
 
@@ -136,21 +138,27 @@ function resolveResearch(): ScentMissionServiceDeps["research"] {
 async function loadServerWardrobe(
   tenantId: string,
   userId: string,
-): Promise<ScentMissionWardrobeItem[]> {
-  const rows = await db
-    .select({ id: userFragrancesTable.id, fragranceData: userFragrancesTable.fragranceData })
-    .from(userFragrancesTable)
-    .where(and(
-      eq(userFragrancesTable.tenantId, tenantId),
-      eq(userFragrancesTable.userId, userId),
-    ))
-    .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id));
+): Promise<{ items: ScentMissionWardrobeItem[]; availability: { enabled: boolean } }> {
+  const [rows, withMe] = await Promise.all([
+    db
+      .select({ id: userFragrancesTable.id, fragranceData: userFragrancesTable.fragranceData })
+      .from(userFragrancesTable)
+      .where(and(
+        eq(userFragrancesTable.tenantId, tenantId),
+        eq(userFragrancesTable.userId, userId),
+      ))
+      .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id)),
+    loadWithMeState(tenantId, userId),
+  ]);
 
-  return sanitizeScentMissionWardrobe(
-    rows
-      .map((row) => missionItemFromWardrobeRow(row.id, row.fragranceData))
-      .filter((item) => item !== null),
-  );
+  return {
+    items: sanitizeScentMissionWardrobe(
+      scopeRowsWithMe(rows, withMe)
+        .map((row) => missionItemFromWardrobeRow(row.id, row.fragranceData))
+        .filter((item) => item !== null),
+    ),
+    availability: { enabled: withMe.enabled },
+  };
 }
 
 router.post("/scent-mission", missionRateLimit, optionalAuth, async (req: AuthRequest, res) => {
@@ -164,12 +172,16 @@ router.post("/scent-mission", missionRateLimit, optionalAuth, async (req: AuthRe
     // Signed-in users get their wardrobe loaded server-side; guests rely on
     // the sanitized summary they sent in `context.wardrobe`.
     let serverWardrobe: ScentMissionWardrobeItem[] | undefined;
+    let serverWardrobeAvailability: { enabled: boolean } | undefined;
     if (req.user) {
-      serverWardrobe = await loadServerWardrobe(getTenantId(req), req.user.id);
+      const loaded = await loadServerWardrobe(getTenantId(req), req.user.id);
+      serverWardrobe = loaded.items;
+      serverWardrobeAvailability = loaded.availability;
     }
 
     const response = await executeScentMission(parsed.request, {
       serverWardrobe,
+      serverWardrobeAvailability,
       deps: {
         llmChat: resolveLlmChat(),
         research: resolveResearch(),

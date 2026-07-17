@@ -55,6 +55,12 @@ import {
 /** A flattened catalog hit the search dep returns (loose by design). */
 export type BeamCatalogHit = { id: string; flat: Record<string, unknown>; score: number };
 
+export type BeamAvailableScope<T> = {
+  enabled: boolean;
+  totalCount: number;
+  items: T[];
+};
+
 /** Map a CandidatePacket to the note/accord profile the overlap math consumes. */
 function overlapProfileFromPacket(packet: CandidatePacket): OverlapProfile {
   return {
@@ -103,6 +109,10 @@ export type BeamToolDeps = {
    * keeping the tool tests and any lean deploy on the original surface.
    */
   loadWardrobePackets?: (ctx: BeamRunContext) => Promise<CandidatePacket[]>;
+  /** Immediate recommendation pool. Enabled+empty is a deliberate zero-candidate scope. */
+  loadAvailableVault?: (ctx: BeamRunContext) => Promise<BeamAvailableScope<ScentMissionWardrobeItem>>;
+  /** Rich packet equivalent of loadAvailableVault for beam_get_wardrobe. */
+  loadAvailableWardrobePackets?: (ctx: BeamRunContext) => Promise<BeamAvailableScope<CandidatePacket>>;
   /** Catalog (global_fragrances) search → flattened profiles. */
   searchCatalog: (query: string, limit: number) => Promise<BeamCatalogHit[]>;
   /**
@@ -276,16 +286,23 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
     {
       name: "beam_get_user_context",
       description:
-        "Get a compact summary of the signed-in user's situation: how many fragrances they own, the dominant scent families in their vault, and today's weather context. Call this first to ground recommendations.",
+        "Get a compact summary of the signed-in user's situation: full vault size, dominant scent families, optional With Me availability status/count, and today's weather context. Call this first to ground recommendations.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       handler: async (_input, ctx) => {
         // Count from the UNCAPPED ownership read: the mission loader clamps to
         // MAX_WARDROBE_ITEMS for the scorer, and a clamped count here disagrees
         // with beam_get_wardrobe's real total — a mismatch models narrate back
         // to the user ("count says 60, but 152 items returned").
-        const [vault, weather] = await Promise.all([loadOwnershipVault(ctx), deps.getWeather(ctx)]);
+        const [vault, available, weather] = await Promise.all([
+          loadOwnershipVault(ctx),
+          deps.loadAvailableVault ? deps.loadAvailableVault(ctx) : Promise.resolve(null),
+          deps.getWeather(ctx),
+        ]);
         return {
           wardrobeSummary: { count: vault.length, topFamilies: topFamilies(vault) },
+          withMeSummary: available
+            ? { enabled: available.enabled, count: available.items.length }
+            : { enabled: false, count: vault.length },
           weather: {
             temperature_f: weather.temperature_f ?? null,
             humidity_percent: weather.humidity_percent ?? null,
@@ -299,16 +316,25 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
     {
       name: "beam_get_wardrobe",
       description:
-        "List the fragrances the signed-in user already owns, as candidate packets (id, name, brand, note pyramid, accords, performance). Use these ids when reasoning about what they own.",
+        "List the owned fragrances currently eligible for wear-now recommendations. When With Me is enabled this returns only bottles physically with the user (possibly none); otherwise it returns the full vault. The response includes scope and totalOwnedCount.",
       inputSchema: { type: "object", properties: {}, additionalProperties: false },
       handler: async (_input, ctx) => {
+        if (deps.loadAvailableWardrobePackets) {
+          const available = await deps.loadAvailableWardrobePackets(ctx);
+          return {
+            count: available.items.length,
+            totalOwnedCount: available.totalCount,
+            scope: available.enabled ? "with_me" : "full_vault",
+            items: available.items,
+          };
+        }
         if (deps.loadWardrobePackets) {
           const items = await deps.loadWardrobePackets(ctx);
-          return { count: items.length, items };
+          return { count: items.length, totalOwnedCount: items.length, scope: "full_vault", items };
         }
         const vault = await deps.loadVault(ctx);
         const items: CandidatePacket[] = vault.map((item) => packetFromOwnedItem(item));
-        return { count: items.length, items };
+        return { count: items.length, totalOwnedCount: items.length, scope: "full_vault", items };
       },
     },
 
@@ -548,8 +574,21 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
         additionalProperties: false,
       },
       handler: async (input, ctx) => {
-        const [vault, localWeather] = await Promise.all([deps.loadVault(ctx), deps.getWeather(ctx)]);
-        if (vault.length === 0) return { recommendation: null, picks: [], note: "vault is empty" };
+        const [available, localWeather] = await Promise.all([
+          deps.loadAvailableVault
+            ? deps.loadAvailableVault(ctx)
+            : deps.loadVault(ctx).then((items) => ({ enabled: false, totalCount: items.length, items })),
+          deps.getWeather(ctx),
+        ]);
+        const vault = available.items;
+        if (vault.length === 0) {
+          return {
+            recommendation: null,
+            picks: [],
+            scope: available.enabled ? "with_me" : "full_vault",
+            note: available.enabled ? "With Me is active but no bottles are selected" : "vault is empty",
+          };
+        }
         const record = (typeof input === "object" && input !== null ? input : {}) as Record<string, unknown>;
         const calibration = parseCalibration(input);
 
@@ -590,6 +629,7 @@ export function createBeamTools(deps: BeamToolDeps): BeamToolDefinition[] {
           // the grounded ranked set the agent draws a multi-bottle kit from.
           recommendation: picks[0],
           picks,
+          scope: available.enabled ? "with_me" : "full_vault",
           scoredFor: {
             locationLabel: locationLabel ?? null,
             usedOverride: override !== null,
