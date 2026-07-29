@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { m, AnimatePresence } from "framer-motion";
 import { SCENT_EASE_OUT_EXPO } from "@/lib/motion";
 import { Cookie, ShieldCheck, X } from "lucide-react";

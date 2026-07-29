@@ -126,13 +126,13 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
   // get the cheap path too.
   const reduced = useCalmMotion();
 
-  const reviewsKey = useMemo(
-    () => reviews.map((r) => r.text).join("|").slice(0, 6000),
-    [reviews],
-  );
+  // SharePage reconstructs its review array during render. The content-derived
+  // cache key is the stable trigger; this event supplies the matching latest input.
+  const readReviewInput = React.useEffectEvent(() => ({ name, brand, reviews }));
 
   useEffect(() => {
-    if (reviews.length === 0) {
+    const reviewInput = readReviewInput();
+    if (reviewInput.reviews.length === 0) {
       setComments([]);
       setLoading(false);
       setFetchError(null);
@@ -149,7 +149,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
     setLoading(true);
     setFetchError(null);
     setComments([]);
-    summarizeReviews({ name, brand, reviews }, { signal: controller.signal })
+    summarizeReviews(reviewInput, { signal: controller.signal })
       .then((result) => {
         if (!controller.signal.aborted) {
           if (result && result.length > 0) {
@@ -169,7 +169,7 @@ export function ReviewsPanel({ name, brand, reviews }: ReviewsPanelProps) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [reviewsKey, name, brand, cacheKey, retryCount]);
+  }, [cacheKey, retryCount]);
 
   useEffect(() => {
     setCurrentIndex(0);

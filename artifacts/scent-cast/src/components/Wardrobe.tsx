@@ -1238,8 +1238,10 @@ export const Wardrobe: React.FC<{
     });
   }, [items]);
 
+  const selectedItemId = selectedItem?.id;
+
   React.useEffect(() => {
-    if (!selectedItem) {
+    if (!selectedItemId) {
       setDetailDeferredContentReady(false);
       return;
     }
@@ -1292,7 +1294,7 @@ export const Wardrobe: React.FC<{
       }
       if (readyTimer) window.clearTimeout(readyTimer);
     };
-  }, [constrainedDetailMode, selectedItem?.id]);
+  }, [constrainedDetailMode, selectedItemId]);
 
   const prefetchReviews = React.useCallback((item: Fragrance) => {
     const rawReviews = extractDetailReviews(item.raw_engine_detail);
@@ -1554,6 +1556,9 @@ export const Wardrobe: React.FC<{
     setClarifySolverId('');
     // Fresh bottle → forget prior load failures so its images get a clean try.
     setBrokenDetailImageUrls((prev) => (prev.size === 0 ? prev : new Set()));
+    // Reset only when the bottle identity changes. Tracking imageAdjustment
+    // would overwrite unsaved frame-editor changes during the open session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedItem?.id]);
 
   const handleRefreshImage = async (item: Fragrance, solverId?: WardrobeImageSolverId) => {

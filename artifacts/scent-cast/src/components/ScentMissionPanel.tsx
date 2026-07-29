@@ -1835,7 +1835,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       typeof weather?.condition === 'string' ? weather.condition : null,
     ].filter(Boolean);
     return weatherParts.length > 0 ? weatherParts.join(' / ') : 'Weather context ready when available';
-  }, [agentCues.destination, agentMission, weather, dateLabel]);
+  }, [agentCues.destination, agentCues.month, agentMission, weather, dateLabel]);
 
   // Surface progress to the host so the title + progress + close can render in a
   // header strip above the bordered card rather than crowding the panel interior.

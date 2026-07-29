@@ -143,7 +143,6 @@ export const ArenaBattleStage: React.FC<ArenaBattleStageProps> = ({
     if (revealed && freshVote && revealRef.current) {
       revealRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revealed, freshVote]);
   const guestLocalOnly = Boolean(localVote && !authToken);
   const selectedKey = localVote;

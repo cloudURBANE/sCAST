@@ -17,7 +17,7 @@ import { VaultCard } from '@/components/VaultCard';
 import { VaultGridModeToggle } from '@/components/VaultGridModeToggle';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useToast } from '@/hooks/use-toast';
 import { useVaultGridPreference } from '@/hooks/useVaultGridPreference';
 import { publicShareBuyLinksEndpoint } from '@/lib/shareLinks';
