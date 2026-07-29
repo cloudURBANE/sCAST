@@ -14,13 +14,16 @@ read-only access regardless of what you ask for. Use them as follows.
 ## The tools
 
 ### `beam_get_user_context` — call first
-Input: none. Returns vault size, dominant scent families, and today's weather. Grounds
-every recommendation. Cheap; always start here for personalized requests.
+Input: none. Returns full vault size, dominant scent families, With Me status/count,
+and today's weather. Grounds every recommendation. Cheap; always start here for
+personalized requests.
 
 ### `beam_get_wardrobe`
-Input: none. Returns owned fragrances as **candidate packets**: `fragranceId`,
+Input: none. Returns currently eligible owned fragrances as **candidate packets**: `fragranceId`,
 `canonicalName`, `brand`, `accords`, notes, performance, `sourceConfidence`,
-`missingFields`. Use these ids when reasoning about what they own.
+`missingFields`, plus `scope` and `totalOwnedCount`. When scope is `with_me`, the
+returned bottles are the only eligible immediate owned picks; an empty result is
+deliberate. When scope is `full_vault`, normal full-vault behavior applies.
 
 ### `beam_analyze_collection` — deterministic; call first for collection questions
 Input: none. Runs the evidence-gated analysis of the owned collection: family
@@ -72,8 +75,9 @@ for normal recommendations, weather/occasion fits, ranking, or comparing common 
 
 - Only recommend `fragranceId`s / fragrances that appeared in a packet from a tool.
 - Never surface internal bookkeeping to the user: tool mechanics, retries, or counts
-  that disagree between tool results. `beam_get_wardrobe`'s count is the vault size;
-  if another summary disagrees, use the wardrobe count and move on silently.
+  that disagree between tool results. `beam_get_user_context.wardrobeSummary.count`
+  and `beam_get_wardrobe.totalOwnedCount` are full-vault size; `beam_get_wardrobe.count`
+  is the active recommendation-pool size.
 - Batch detail calls; don't loop single lookups.
 - Stop as soon as the request is satisfied — respect the tool-call budget.
 - If a tool errors, surface a graceful fallback (see AGENTS.md) — don't retry blindly.

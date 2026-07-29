@@ -6,9 +6,11 @@ import { getTenantId } from "../middlewares/tenant";
 import { db } from "@workspace/db";
 import {
   imageCacheTable,
+  userFragranceWithMeTable,
   userFragrancesTable,
+  userSettingsTable,
 } from "@workspace/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { resolveSharedImageUrl } from "../services/imageHydration";
 import { rebuildWardrobeForUser } from "../services/wardrobeRebuild";
 import { logger } from "../lib/logger";
@@ -33,6 +35,8 @@ import {
   ensureOwnedWardrobeImage,
   parseWardrobeFailedImageUrl,
 } from "../services/wardrobeImageEnsure";
+import { loadWithMeState } from "../services/withMeWardrobe";
+import { parseWithMeUpdate } from "../services/withMeCore";
 
 const router = Router();
 
@@ -144,6 +148,121 @@ router.get("/wardrobe", requireAuth, async (req: AuthRequest, res) => {
   const fragrances = hydrated.map((data, i) => ({ ...data, _dbId: rows[i]!.id }));
 
   res.json(fragrances);
+});
+
+/** Current physical-availability scope used by wear-now recommendation lanes. */
+router.get("/wardrobe/with-me", requireAuth, async (req: AuthRequest, res) => {
+  const user = req.user!;
+  const tenantId = getTenantId(req);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.json(await loadWithMeState(tenantId, user.id));
+});
+
+/**
+ * Atomically replace the user's With Me set.
+ *
+ * The client sends the version returned by the last GET/PUT. A stale editor
+ * receives 409 plus the canonical state instead of silently overwriting a set
+ * saved in another tab/device. Unknown/deleted ids are safely dropped; ids are
+ * resolved only inside the authenticated tenant/user wardrobe.
+ */
+router.put("/wardrobe/with-me", requireAuth, wardrobeWriteRateLimit, async (req: AuthRequest, res) => {
+  const parsed = parseWithMeUpdate(req.body);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  const user = req.user!;
+  const tenantId = getTenantId(req);
+  const requested = parsed.value;
+  const result = await db.transaction(async (tx) => {
+    // Ensure there is a row to lock even for a brand-new user.
+    await tx
+      .insert(userSettingsTable)
+      .values({ tenantId, userId: user.id })
+      .onConflictDoNothing({ target: userSettingsTable.userId });
+
+    const [settings] = await tx
+      .select({ enabled: userSettingsTable.withMeEnabled, updatedAt: userSettingsTable.withMeUpdatedAt })
+      .from(userSettingsTable)
+      .where(eq(userSettingsTable.userId, user.id))
+      .for("update")
+      .limit(1);
+    const currentUpdatedAt = settings?.updatedAt?.toISOString() ?? null;
+    if (currentUpdatedAt !== requested.updatedAt) {
+      const memberships = await tx
+        .select({ fragranceId: userFragranceWithMeTable.userFragranceId })
+        .from(userFragranceWithMeTable)
+        .where(and(
+          eq(userFragranceWithMeTable.tenantId, tenantId),
+          eq(userFragranceWithMeTable.userId, user.id),
+        ));
+      return {
+        conflict: true as const,
+        state: {
+          enabled: settings?.enabled === true,
+          fragranceIds: memberships.map((row) => row.fragranceId),
+          updatedAt: currentUpdatedAt,
+        },
+      };
+    }
+
+    const ownedRows = requested.enabled && requested.fragranceIds.length > 0
+      ? await tx
+          .select({ id: userFragrancesTable.id })
+          .from(userFragrancesTable)
+          .where(and(
+            eq(userFragrancesTable.tenantId, tenantId),
+            eq(userFragrancesTable.userId, user.id),
+            inArray(userFragrancesTable.id, requested.fragranceIds),
+          ))
+      : [];
+    const ownedIds = new Set(ownedRows.map((row) => row.id));
+    const canonicalIds = requested.fragranceIds.filter((id) => ownedIds.has(id));
+
+    await tx
+      .delete(userFragranceWithMeTable)
+      .where(and(
+        eq(userFragranceWithMeTable.tenantId, tenantId),
+        eq(userFragranceWithMeTable.userId, user.id),
+      ));
+    if (requested.enabled && canonicalIds.length > 0) {
+      await tx.insert(userFragranceWithMeTable).values(
+        canonicalIds.map((userFragranceId) => ({ userFragranceId, tenantId, userId: user.id })),
+      );
+    }
+
+    // Keep the optimistic-concurrency token strictly monotonic even when two
+    // saves land inside the same millisecond (the precision JavaScript Dates
+    // expose for this timestamp column).
+    const now = new Date(Math.max(Date.now(), (settings?.updatedAt?.getTime() ?? 0) + 1));
+    await tx
+      .update(userSettingsTable)
+      .set({
+        tenantId,
+        withMeEnabled: requested.enabled,
+        withMeUpdatedAt: now,
+        updatedAt: now,
+      })
+      .where(eq(userSettingsTable.userId, user.id));
+
+    return {
+      conflict: false as const,
+      state: {
+        enabled: requested.enabled,
+        fragranceIds: canonicalIds,
+        updatedAt: now.toISOString(),
+      },
+    };
+  });
+
+  res.setHeader("Cache-Control", "private, no-store");
+  if (result.conflict) {
+    res.status(409).json({ error: "With Me changed in another session", ...result.state });
+    return;
+  }
+  res.json(result.state);
 });
 
 /**

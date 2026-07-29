@@ -2,6 +2,7 @@ export * from "./tenants";
 export * from "./users";
 export * from "./userTokens";
 export * from "./userFragrances";
+export * from "./userFragranceWithMe";
 export * from "./globalFragrances";
 export * from "./imageCache";
 export * from "./userSettings";

@@ -5,7 +5,6 @@ import { DEFAULT_TENANT_SLUG, getDefaultTenantId, getTenantBySlug } from "../ser
 // Augment Express' Request so every handler (authenticated or public) can read
 // the resolved tenant without importing a custom request type.
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       tenantId?: string;

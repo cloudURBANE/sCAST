@@ -322,6 +322,22 @@ test("wardrobe-sync blocks on an empty vault and completes with a summary otherw
   ]);
 });
 
+test("wardrobe-sync distinguishes an intentionally empty With Me set from an empty vault", async () => {
+  const mission = completeScentMissionNode(calibratedMission(), "onboarding");
+  const parsed = parseScentMissionRequest({
+    action: "execute_node",
+    nodeId: "wardrobe-sync",
+    mission,
+    context: { weather: HOT_HUMID, wardrobe: [], wardrobeAvailability: { enabled: true } },
+  });
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) throw new Error("unreachable");
+
+  const blocked = await executeScentMission(parsed.request);
+  assert.match(blocked.assistantMessage!, /With Me is active/i);
+  assert.doesNotMatch(blocked.assistantMessage!, /collection's empty/i);
+});
+
 test("execute_node refuses locked nodes without leaking a recommendation", async () => {
   const parsed = parseScentMissionRequest({
     action: "execute_node",

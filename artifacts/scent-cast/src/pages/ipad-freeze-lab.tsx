@@ -1344,11 +1344,12 @@ export default function IpadFreezeLab() {
   }
   const probe = probeRef.current;
   const [mode, setMode] = useState<LabMode>(getInitialMode);
+  const initialModeRef = useRef(mode);
 
   useProbeRender(probe, 'IpadFreezeLab');
 
   useEffect(() => {
-    probe.start(mode);
+    probe.start(initialModeRef.current);
     return () => probe.stop();
   }, [probe]);
 

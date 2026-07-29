@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
-import { Routes, Route, useLocation, useParams, type Location } from 'react-router-dom';
+import { Routes, Route, useLocation, useParams, type Location } from 'react-router';
 import type { Fragrance } from './components/Wardrobe';
 import type { BeamProposalItem } from '@/lib/beamAgentClient';
 import { vaultIdentityKey } from './lib/vaultIdentity';
+import { effectiveWithMeItems } from './lib/withMe';
 import { buildHeroTickerPhrases } from './lib/heroTickerPhrases';
 import { stableProposalItemId, type CurateCollectionResult } from './lib/collectionCuration';
 import { getPendingCuration, curationItemToFragrance, pickResumeCurationTarget } from './lib/curationClient';
@@ -691,6 +692,7 @@ function DashboardView() {
   const { weather } = useWeather();
   const {
     items,
+    withMeState,
     wardrobeLoaded,
     onboardingCompleted,
     onboardingResolved,
@@ -720,6 +722,7 @@ function DashboardView() {
     uploadAdminBottleImage,
     handleRevertWardrobe,
     handleDeleteItem,
+    saveWithMe,
     closeRecommendationOverlay,
     handleVaultSearchStateChange,
     handleExpandArchive,
@@ -727,6 +730,10 @@ function DashboardView() {
     openFragranceDetail,
     clearPendingDetailOpen,
   } = useWardrobe();
+  const recommendationItems = useMemo(
+    () => effectiveWithMeItems(items, withMeState),
+    [items, withMeState],
+  );
   const reduceMotion = useReducedMotion();
   // framer-motion `layout` (FLIP) animations measure getBoundingClientRect and
   // apply compensating transforms. On iOS/iPadOS WebKit, running them on the
@@ -1276,6 +1283,7 @@ function DashboardView() {
                       <React.Suspense fallback={<SignaturePanelFallback />}>
                         <ScentMissionPanel
                           items={items}
+                          withMeState={withMeState}
                           weather={weather}
                           authToken={authToken}
                           onExit={handleExitMission}
@@ -1406,7 +1414,7 @@ function DashboardView() {
             // pill rather than a void mid-page. The column pb still holds nav
             // clearance regardless of overflow. md+ is unchanged.
             <WeeklyOutlookDashboard
-              items={items}
+              items={recommendationItems}
               weather={weather}
               onSelectFragrance={openFragranceDetail}
             />
@@ -1422,6 +1430,8 @@ function DashboardView() {
             <React.Suspense fallback={<WardrobeFallback />}>
               <Wardrobe
                 items={items}
+                withMeState={withMeState}
+                onSaveWithMe={saveWithMe}
                 onDelete={handleDeleteItem}
                 onAdd={handleAddItem}
                 pendingDetailOpen={pendingDetailOpen}

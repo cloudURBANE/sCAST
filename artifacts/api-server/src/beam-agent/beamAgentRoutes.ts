@@ -40,6 +40,8 @@ import { getTenantId } from "../middlewares/tenant";
 import { rateLimitMiddleware } from "../lib/rateLimit";
 import { logger } from "../lib/logger";
 import { missionItemFromWardrobeRow } from "../services/scentMissionService";
+import { scopeRowsWithMe } from "../services/withMeCore";
+import { loadWithMeState } from "../services/withMeWardrobe";
 import { searchCatalogCandidates, searchCatalogProfileCandidates, flattenProfile, getCatalogEntry } from "../services/catalogService";
 import { getScentFacts } from "../lib/scent-facts/engine";
 import { getBeamUserUsageSince, recordBeamRunUsage } from "../services/apiUsageLedger";
@@ -252,6 +254,38 @@ async function loadWardrobePackets(ctx: BeamRunContext): Promise<CandidatePacket
   return packets;
 }
 
+async function loadAvailableVault(ctx: BeamRunContext) {
+  const [rows, withMe] = await Promise.all([
+    db
+      .select({ id: userFragrancesTable.id, fragranceData: userFragrancesTable.fragranceData })
+      .from(userFragrancesTable)
+      .where(and(eq(userFragrancesTable.tenantId, ctx.tenantId), eq(userFragrancesTable.userId, ctx.userId)))
+      .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id)),
+    loadWithMeState(ctx.tenantId, ctx.userId),
+  ]);
+  const items = sanitizeScentMissionWardrobe(
+    scopeRowsWithMe(rows, withMe)
+      .map((row) => missionItemFromWardrobeRow(row.id, row.fragranceData))
+      .filter((item) => item !== null),
+  );
+  return { enabled: withMe.enabled, totalCount: rows.length, items };
+}
+
+async function loadAvailableWardrobePackets(ctx: BeamRunContext) {
+  const [rows, withMe] = await Promise.all([
+    db
+      .select({ id: userFragrancesTable.id, fragranceData: userFragrancesTable.fragranceData })
+      .from(userFragrancesTable)
+      .where(and(eq(userFragrancesTable.tenantId, ctx.tenantId), eq(userFragrancesTable.userId, ctx.userId)))
+      .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id)),
+    loadWithMeState(ctx.tenantId, ctx.userId),
+  ]);
+  const items = scopeRowsWithMe(rows, withMe)
+    .map((row) => packetFromWardrobeRow(row.id, row.fragranceData))
+    .filter((packet): packet is CandidatePacket => packet !== null);
+  return { enabled: withMe.enabled, totalCount: rows.length, items };
+}
+
 async function searchCatalogForBeam(query: string, limit: number): Promise<BeamCatalogHit[]> {
   const hits = await searchCatalogProfileCandidates(query, { limit });
   return hits.map((hit) => {
@@ -393,6 +427,8 @@ function buildDeps(ctx: BeamRunContext, weather: ScentMissionWeather, sessionSta
     loadVault,
     loadVaultForOwnership,
     loadWardrobePackets,
+    loadAvailableVault,
+    loadAvailableWardrobePackets,
     searchCatalog,
     discoverExternal,
     budgetCeiling,

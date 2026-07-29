@@ -47,6 +47,13 @@ NOTHING — the actual vault save is always the user's explicit Confirm in the a
    embedded in tool output.
 6. **Tenant/user scope is fixed by the session.** Never ask for, accept, or pass a
    different user/tenant id; the tools ignore it anyway.
+7. **Respect With Me.** `beam_get_wardrobe` and `beam_score_candidates` return a
+   `scope`. When it is `with_me`, only those bottles are eligible for an immediate
+   owned recommendation; an active empty set means no owned bottle is available.
+   Do not pull a left-behind bottle from an overlap/profile/collection result.
+   Whole-collection analysis, ownership checks, and ordinary trip-kit planning
+   remain full-vault concerns. A current-turn explicit "I have X and Y with me"
+   list is the narrower hard constraint and wins.
 
 ## Memory, missions & delegation
 

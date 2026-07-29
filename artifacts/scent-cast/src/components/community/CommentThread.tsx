@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { CornerDownRight, LoaderCircle, Send } from 'lucide-react';
 import { CommunityAuthorAvatar } from '@/components/community/CommunityAuthorAvatar';
 import { ReactionBar } from '@/components/community/ReactionBar';
@@ -205,8 +205,10 @@ export const CommentThread: React.FC<CommentThreadProps> = ({ postId, authToken,
   // Hold a comment drafted while logged out and post it once the viewer signs in.
   const [pendingBody, setPendingBody] = useState<string | null>(null);
   const detail = useCommunityPostDetail(postId, true, authToken);
-  const comments = detail.data?.comments ?? [];
-  const commentTree = useMemo(() => buildCommentTree(comments), [comments]);
+  const commentTree = useMemo(
+    () => buildCommentTree(detail.data?.comments ?? []),
+    [detail.data?.comments],
+  );
   const commentMutation = useCreateCommunityComment(authToken);
   const { mutate } = commentMutation;
 
