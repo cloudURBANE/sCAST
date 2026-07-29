@@ -30,3 +30,18 @@ export function displayableVaultImageUrl(url: unknown): string {
   const trimmed = url.trim();
   return trimmed && !isBlockedVaultImageUrl(trimmed) ? trimmed : '';
 }
+
+/**
+ * Resolve every image spelling produced by the fragrance engines before the
+ * guest/optimistic add path converts it to the canonical camelCase field.
+ * `imageUrl` stays authoritative when present, matching the server write gate.
+ */
+export function resolveDisplayableVaultImageUrl(value: unknown): string {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+  const record = value as Record<string, unknown>;
+  const canonical = [record.imageUrl, record.image_url, record.image].find(
+    (candidate): candidate is string =>
+      typeof candidate === 'string' && candidate.trim().length > 0,
+  );
+  return displayableVaultImageUrl(canonical);
+}

@@ -6,14 +6,28 @@
 //
 // imageCacheService wraps these with one-time logging side effects.
 
-function readCode(err: unknown): string {
-  const value = err as { code?: unknown } | null;
-  return typeof value?.code === "string" ? value.code : "";
+function errorChain(err: unknown): Array<{ code?: unknown; message?: unknown; cause?: unknown }> {
+  const chain: Array<{ code?: unknown; message?: unknown; cause?: unknown }> = [];
+  const seen = new Set<unknown>();
+  let current = err;
+  for (let depth = 0; depth < 8; depth += 1) {
+    if (!current || typeof current !== "object" || seen.has(current)) break;
+    seen.add(current);
+    const value = current as { code?: unknown; message?: unknown; cause?: unknown };
+    chain.push(value);
+    current = value.cause;
+  }
+  return chain;
 }
 
-function readMessage(err: unknown): string {
-  const value = err as { message?: unknown } | null;
-  return typeof value?.message === "string" ? value.message : "";
+function hasCode(err: unknown, code: string): boolean {
+  return errorChain(err).some((value) => value.code === code);
+}
+
+function hasMessage(err: unknown, pattern: RegExp): boolean {
+  return errorChain(err).some(
+    (value) => typeof value.message === "string" && pattern.test(value.message),
+  );
 }
 
 /**
@@ -22,8 +36,8 @@ function readMessage(err: unknown): string {
  */
 export function isImageCacheRelationMissing(err: unknown): boolean {
   return (
-    readCode(err) === "42P01" ||
-    /relation ["']?image_cache["']? does not exist/i.test(readMessage(err))
+    hasCode(err, "42P01") ||
+    hasMessage(err, /relation ["']?image_cache["']? does not exist/i)
   );
 }
 
@@ -43,9 +57,10 @@ export function isImageCacheRelationMissing(err: unknown): boolean {
  */
 export function isImageCacheConflictTargetMissing(err: unknown): boolean {
   return (
-    readCode(err) === "42P10" ||
-    /no unique or exclusion constraint matching the on conflict specification/i.test(
-      readMessage(err),
+    hasCode(err, "42P10") ||
+    hasMessage(
+      err,
+      /no unique or exclusion constraint matching the on conflict specification/i,
     )
   );
 }
