@@ -354,6 +354,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     authError,
     clearAuthError,
     setAuthUsername,
+    setGuestPromptDismissed,
     setGuestModeAcknowledged,
     handleContinueAsGuest,
     handleAuth,

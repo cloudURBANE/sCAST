@@ -1,5 +1,5 @@
 import { Compass, Home } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { APP_BRAND_MARK } from '@/lib/appBrand';
 
 export default function NotFound() {

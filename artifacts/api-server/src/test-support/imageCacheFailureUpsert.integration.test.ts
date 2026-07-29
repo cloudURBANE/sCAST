@@ -139,7 +139,7 @@ test("negative-cache upsert never downgrades a ready row (fix: ready-row guard)"
     assert.equal(row.processing_status, "ready");
     assert.equal(row.failure_reason, null);
     assert.equal(row.public_url, "https://cdn.example.com/hash-ready.webp");
-    assert.match(row.updated_at, /^2026-01-01/);
+    assert.equal(new Date(row.updated_at).toISOString(), new Date(OLD_TIMESTAMP).toISOString());
   } finally {
     await h.close();
   }
@@ -169,7 +169,7 @@ test("repeat failure keeps the first failure's updated_at so the retry TTL elaps
     assert.equal(row.processing_status, "failed");
     // The reason may refresh, but the TTL anchor must not.
     assert.equal(row.failure_reason, "Image fetch failed with HTTP 410");
-    assert.match(row.updated_at, /^2026-01-01/);
+    assert.equal(new Date(row.updated_at).toISOString(), new Date(OLD_TIMESTAMP).toISOString());
   } finally {
     await h.close();
   }

@@ -467,13 +467,13 @@ export const PostComposer = forwardRef<PostComposerHandle, PostComposerProps>(fu
     formRef.current?.requestSubmit();
   };
 
-  useEffect(() => {
-    return () => {
-      fragranceAbortRef.current?.abort();
-      battleAAbortRef.current?.abort();
-      battleBAbortRef.current?.abort();
-    };
+  const abortPendingSearches = React.useCallback(() => {
+    fragranceAbortRef.current?.abort();
+    battleAAbortRef.current?.abort();
+    battleBAbortRef.current?.abort();
   }, []);
+
+  useEffect(() => abortPendingSearches, [abortPendingSearches]);
 
   useEffect(() => {
     if (postType !== 'battle') return undefined;

@@ -1,5 +1,5 @@
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { APP_BRAND_MARK } from "@/lib/appBrand";
 import { openConsentManager } from "@/lib/consent";
 

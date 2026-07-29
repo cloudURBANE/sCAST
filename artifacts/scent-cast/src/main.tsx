@@ -2,7 +2,7 @@ import { createRoot } from "react-dom/client";
 import { LazyMotion } from "framer-motion";
 import { HelmetProvider } from "react-helmet-async";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { CrashDiag } from "./components/CrashDiag";
 import { PwaUpdater } from "./components/pwa/PwaUpdater";
