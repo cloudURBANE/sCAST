@@ -1754,7 +1754,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       })
       .slice(0, slots);
     for (const item of candidates) scheduleImageBackfillRehydrate(item, token);
-  }, [authToken, imageSyncTargets.length, items, scheduleImageBackfillRehydrate, wardrobeLoaded]);
+  }, [authToken, imageSyncTargets, items, scheduleImageBackfillRehydrate, wardrobeLoaded]);
 
   const loadAppState = useCallback(async (token: string, signal?: AbortSignal): Promise<boolean> => {
     const res = await fetch('/api/me/app-state', {
@@ -3334,6 +3334,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     activeRecommendation,
     activeEngineRecommendation,
     recommendationReason,
+    scentPreferences,
     userId,
     wardrobeRevertSnapshot,
     wardrobeFixBusy,
@@ -3353,7 +3354,6 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setActiveRecommendation,
     setActiveEngineRecommendation,
     setRecommendationReason,
-    scentPreferences,
     updateScentPreferences,
     markFragranceWorn,
     setUserId,
@@ -3386,6 +3386,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     activeRecommendation,
     activeEngineRecommendation,
     recommendationReason,
+    scentPreferences,
     userId,
     wardrobeRevertSnapshot,
     wardrobeFixBusy,
@@ -3399,6 +3400,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     handleWardrobeImageLoad,
     handleWardrobeImageError,
     ensureWardrobeImage,
+    updateScentPreferences,
+    markFragranceWorn,
     loadWardrobe,
     retryLoadWardrobe,
     handleAddItem,

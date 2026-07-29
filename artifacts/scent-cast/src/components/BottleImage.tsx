@@ -210,13 +210,18 @@ const BottleImageComponent: React.FC<BottleImageProps> = ({
     onError?.();
   };
 
+  // Keep the completion probe keyed to image state while calling the latest
+  // render's handlers (including fresh consumer callbacks).
+  const handleCachedLoad = React.useEffectEvent(handleLoad);
+  const handleCachedError = React.useEffectEvent(handleError);
+
   React.useEffect(() => {
     if (useVideo || !activeUrl || broken || !isLoading) return;
     const img = imgRef.current;
     if (!img?.complete) return;
 
     if (img.naturalWidth > 0) {
-      handleLoad();
+      handleCachedLoad();
     } else if (loading !== 'lazy' || img.currentSrc) {
       // `complete && naturalWidth === 0` is ambiguous; `currentSrc` disambiguates
       // it (it is only set once the browser has actually selected and fetched a
@@ -235,7 +240,7 @@ const BottleImageComponent: React.FC<BottleImageProps> = ({
       //    `complete && naturalWidth === 0`; that is not an error (flagging it is
       //    what once surfaced a false "Unavailable" on the iPhone grid). Skip it
       //    and wait for the real load/error event once it scrolls into view.
-      handleError();
+      handleCachedError();
     }
   }, [broken, isLoading, retryCount, activeUrl, useVideo, loading, usedProxyFallback]);
 

@@ -92,12 +92,7 @@ test("two different source aspect ratios produce the SAME on-canvas height", asy
   assert.ok(Math.abs(ba.h - bb.h) <= 4, `heights diverged: ${ba.h} vs ${bb.h}`);
 });
 
-// SKIPPED (2026-07-08, test-discovery migration): this file was never enrolled
-// in the old hand-maintained test list, so it never ran in CI and drifted —
-// the engine now seats the base 31px from the bottom vs the requested 26±4.
-// Re-enable after deciding whether orientPackshot's baselineOffset contract or
-// this expectation is right; do NOT widen the tolerance to make it green.
-test.skip("seats the bottle base on the baseline (offset px from bottom)", async () => {
+test("seats the bottle base on the baseline (offset px from bottom)", async () => {
   const input = await makeCutout(400, 600, 150, 80, 100, 420);
   const r = await orientPackshot(input, { baselineOffset: 26 });
   assert.equal(r.ok, true);

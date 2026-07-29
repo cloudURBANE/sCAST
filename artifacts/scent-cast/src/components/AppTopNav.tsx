@@ -1,6 +1,6 @@
 import React from 'react';
 import { Home, LogOut, Settings, Share2, ShieldCheck, Swords, UsersRound } from 'lucide-react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { NotificationFeed } from './notifications/NotificationFeed';
 import {
