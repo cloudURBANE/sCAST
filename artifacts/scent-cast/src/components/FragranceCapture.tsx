@@ -27,6 +27,7 @@ import {
 } from '@/lib/fragranceNotes';
 import { resolveFragranceFacts } from '@/lib/fragranceFacts';
 import { isIpadSafariPerformanceMode, isLowRenderBudget } from '@/lib/platform';
+import { resolveDisplayableVaultImageUrl } from '@/lib/vaultImagePolicy';
 
 /**
  * Generate a stable, collision-resistant id for newly added wardrobe items.
@@ -974,9 +975,7 @@ export const FragranceCapture: React.FC<{
         pipelineProfile = fallbackProfile;
       }
 
-      const pipelineImageUrl = firstString(
-        typeof pipelineProfile.imageUrl === 'string' ? pipelineProfile.imageUrl : undefined,
-      );
+      const pipelineImageUrl = resolveDisplayableVaultImageUrl(pipelineProfile);
       const pipelinePyramid = normalizePyramidInput(pipelineProfile.pyramid as unknown);
       const resolvedPyramid = hasTieredPyramidNotes(pyramidNotes)
         ? pyramidNotes

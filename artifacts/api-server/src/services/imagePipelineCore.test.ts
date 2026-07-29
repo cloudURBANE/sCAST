@@ -191,6 +191,23 @@ test("image cache classifies the un-migrated ON CONFLICT index error (42P10) as 
     }),
     true,
   );
+  // DrizzleQueryError keeps the PostgreSQL code/message on `cause`; the cache
+  // fallback must still return the freshly uploaded image instead of dropping it.
+  assert.equal(
+    isImageCacheConflictTargetMissing({
+      message: 'Failed query: insert into "image_cache"',
+      cause: { code: "42P10" },
+    }),
+    true,
+  );
+  assert.equal(
+    isImageCacheConflictTargetMissing({
+      cause: {
+        message: "there is no unique or exclusion constraint matching the ON CONFLICT specification",
+      },
+    }),
+    true,
+  );
 
   // It must NOT swallow unrelated errors, and the two detectors stay disjoint.
   assert.equal(isImageCacheConflictTargetMissing({ code: "23505" }), false);
@@ -199,6 +216,7 @@ test("image cache classifies the un-migrated ON CONFLICT index error (42P10) as 
   assert.equal(isImageCacheRelationMissing({ code: "42P10" }), false);
   // The table-missing detector still recognizes 42P01.
   assert.equal(isImageCacheRelationMissing({ code: "42P01" }), true);
+  assert.equal(isImageCacheRelationMissing({ cause: { code: "42P01" } }), true);
 });
 
 test("explicit Supabase storage wins over a derived Firebase bucket", async () => {

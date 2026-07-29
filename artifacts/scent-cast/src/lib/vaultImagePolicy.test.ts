@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { displayableVaultImageUrl, isBlockedVaultImageUrl } from "./vaultImagePolicy.ts";
+import {
+  displayableVaultImageUrl,
+  isBlockedVaultImageUrl,
+  resolveDisplayableVaultImageUrl,
+} from "./vaultImagePolicy.ts";
 
 test("blocks raw Fragrantica image urls (fimgs.net and locale domains)", () => {
   assert.equal(isBlockedVaultImageUrl("https://fimgs.net/mdimg/perfume/375x500.10421.jpg"), true);
@@ -42,4 +46,43 @@ test("displayableVaultImageUrl blanks blocked urls and trims clean ones", () => 
   );
   assert.equal(displayableVaultImageUrl(42), "");
   assert.equal(displayableVaultImageUrl("   "), "");
+});
+
+test("resolveDisplayableVaultImageUrl carries engine image aliases into the canonical field", () => {
+  assert.equal(
+    resolveDisplayableVaultImageUrl({ image_url: " https://cdn.example.com/snake.webp " }),
+    "https://cdn.example.com/snake.webp",
+  );
+  assert.equal(
+    resolveDisplayableVaultImageUrl({ image: "https://cdn.example.com/bare.webp" }),
+    "https://cdn.example.com/bare.webp",
+  );
+});
+
+test("resolveDisplayableVaultImageUrl prefers the first non-empty canonical spelling", () => {
+  assert.equal(
+    resolveDisplayableVaultImageUrl({
+      imageUrl: "https://cdn.example.com/camel.webp",
+      image_url: "https://cdn.example.com/snake.webp",
+      image: "https://cdn.example.com/bare.webp",
+    }),
+    "https://cdn.example.com/camel.webp",
+  );
+  assert.equal(
+    resolveDisplayableVaultImageUrl({
+      imageUrl: "   ",
+      image_url: "https://cdn.example.com/snake.webp",
+    }),
+    "https://cdn.example.com/snake.webp",
+  );
+});
+
+test("resolveDisplayableVaultImageUrl applies the crawled-image display gate to aliases", () => {
+  assert.equal(
+    resolveDisplayableVaultImageUrl({
+      image_url: "https://fimgs.net/mdimg/perfume/375x500.10421.jpg",
+    }),
+    "",
+  );
+  assert.equal(resolveDisplayableVaultImageUrl(null), "");
 });

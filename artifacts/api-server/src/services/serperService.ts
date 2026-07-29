@@ -4,6 +4,11 @@ import { KeyPool, registerKeyPool } from "../lib/keyPool";
 import { keepAliveHttpAgent, keepAliveHttpsAgent } from "../lib/keepAliveAgent";
 import type { SerperRefineMode } from "./imageSolvers";
 import { scoreSerperImageCandidate } from "./serperCandidateScoring";
+import {
+  classifySerperKeyFailure,
+  dispatchImageCandidateSearch,
+  type ImageCandidateProvider,
+} from "./serperProviderCore";
 // Query composition (packshot suffixes, Google's 32-word cap) lives in the
 // dependency-free serperQueryCore.ts so it can be unit-tested without axios.
 import { applySerperRefinement } from "./serperQueryCore";
@@ -31,11 +36,10 @@ const ENGINE_BASE = (
 /**
  * Image candidate provider. `serper` (default) keeps the legacy Serper.dev
  * `/images` call; `engine` routes to the engine's Decodo-backed
- * `GET /api/fragrances/image-search`. Default stays `serper` until the engine
- * route ships (handoff Risk 1) so production behaviour is unchanged; flip to
- * `engine` via env once the endpoint is live.
+ * `GET /api/fragrances/image-search`. When the engine returns no usable results,
+ * searchSerperImageCandidates falls back to the legacy Serper path.
  */
-function imageProvider(): "engine" | "serper" {
+function imageProvider(): ImageCandidateProvider {
   return (process.env.IMAGE_PROVIDER ?? "serper").trim().toLowerCase() === "engine" ? "engine" : "serper";
 }
 
@@ -54,6 +58,7 @@ export type SerperImageCandidate = SerperImageResult & {
 
 type SerperResponse = {
   images?: SerperImageResult[];
+  message?: string;
 };
 
 /**
@@ -115,10 +120,18 @@ export async function searchSerperImageCandidates(
   query: string,
   options?: { refine?: SerperRefineMode },
 ): Promise<SerperImageCandidate[]> {
-  if (imageProvider() === "engine") {
-    return searchEngineImageCandidates(query, options);
+  const result = await dispatchImageCandidateSearch({
+    provider: imageProvider(),
+    searchEngine: () => searchEngineImageCandidates(query, options),
+    searchSerper: () => searchSerperImageCandidatesViaSerper(query, options),
+  });
+  if (result.fallbackUsed) {
+    logger.warn(
+      { queryPreview: query.slice(0, 120) },
+      "[engine-image] returned no usable candidates; falling back to Serper",
+    );
   }
-  return searchSerperImageCandidatesViaSerper(query, options);
+  return result.candidates;
 }
 
 /** Legacy Serper.dev `/images` path. Billed against the SERPER_API_KEYS pool. */
@@ -161,12 +174,16 @@ async function searchSerperImageCandidatesViaSerper(
         return { ok: true, value: rankImageCandidates(images) };
       }
 
-      if (response.status === 429) {
+      const failureAction = classifySerperKeyFailure(response.status, response.data?.message);
+      if (failureAction === "cooldown") {
         logger.warn({ key: label }, "[serper] rate-limited (429); rotating to next key");
         return { ok: false, action: "cooldown" };
       }
-      if (response.status === 401 || response.status === 402 || response.status === 403) {
-        logger.warn({ key: label, status: response.status }, "[serper] key unauthorized / out of credits; retiring");
+      if (failureAction === "retire") {
+        logger.warn(
+          { key: label, status: response.status },
+          "[serper] key unauthorized or out of credits; retiring",
+        );
         return { ok: false, action: "retire" };
       }
 

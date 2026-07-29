@@ -5,7 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { Fragrance, DestinationType, EnergyState } from '@/components/Wardrobe';
 import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { reconcileWardrobeItems } from '@/lib/wardrobeReconcile';
-import { displayableVaultImageUrl } from '@/lib/vaultImagePolicy';
+import { resolveDisplayableVaultImageUrl } from '@/lib/vaultImagePolicy';
 import { vaultIdentityKey } from '@/lib/vaultIdentity';
 import { resolveFragranceFacts, usefulFragranceFact } from '@/lib/fragranceFacts';
 import {
@@ -203,7 +203,7 @@ function readGuestWardrobeItems(): Fragrance[] {
         brand,
         // Guest rows never round-trip through server hydration, so the
         // crawled-Fragrantica display gate applies here on read.
-        imageUrl: displayableVaultImageUrl(value.imageUrl),
+        imageUrl: resolveDisplayableVaultImageUrl(value),
         season: usefulFragranceFact(value.season, { rejectUniversal: true }) ?? '',
       } as Fragrance];
     });
@@ -2019,7 +2019,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // owner-rejected on vault tiles — blank it locally so the tile shows the
     // honest syncing placeholder while the image pipeline resolves a processed
     // packshot. The server applies the same gate to its persisted copy.
-    newItem.imageUrl = displayableVaultImageUrl(newItem.imageUrl);
+    newItem.imageUrl = resolveDisplayableVaultImageUrl(newItem);
 
     // Client-side duplicate guard. The search overlay flags already-saved results
     // via `existingVaultKeys`, but the Beam curate loop, a double-tap, or a
