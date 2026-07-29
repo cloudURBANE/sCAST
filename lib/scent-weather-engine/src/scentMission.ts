@@ -129,6 +129,8 @@ export type ScentMissionRequest = {
   context: {
     weather: ScentMissionWeather;
     wardrobe?: ScentMissionWardrobeItem[];
+    /** True when the wardrobe array is the user's explicit With Me subset. */
+    wardrobeAvailability?: { enabled: boolean };
   };
 };
 

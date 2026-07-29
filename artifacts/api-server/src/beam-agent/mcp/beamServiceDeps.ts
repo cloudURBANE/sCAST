@@ -28,6 +28,8 @@ import type { BeamRunContext, CandidatePacket } from "../types.ts";
 import type { BeamCatalogHit, BeamToolDeps } from "../beamTools.ts";
 import { packetFromWardrobeRow } from "../beamToolCore.ts";
 import { missionItemFromWardrobeRow } from "../../services/scentMissionService";
+import { scopeRowsWithMe } from "../../services/withMeCore";
+import { loadWithMeState } from "../../services/withMeWardrobe";
 import { searchCatalogCandidates, searchCatalogProfileCandidates, flattenProfile, getCatalogEntry } from "../../services/catalogService";
 import { discoverExternalCandidates } from "../../services/engineDiscover";
 import { fetchEngineEnrichmentState } from "../../services/enrichmentProcessor";
@@ -112,6 +114,38 @@ async function loadWardrobePackets(ctx: BeamRunContext): Promise<CandidatePacket
   return packets;
 }
 
+async function loadAvailableVault(ctx: BeamRunContext) {
+  const [rows, withMe] = await Promise.all([
+    db
+      .select({ id: userFragrancesTable.id, fragranceData: userFragrancesTable.fragranceData })
+      .from(userFragrancesTable)
+      .where(and(eq(userFragrancesTable.tenantId, ctx.tenantId), eq(userFragrancesTable.userId, ctx.userId)))
+      .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id)),
+    loadWithMeState(ctx.tenantId, ctx.userId),
+  ]);
+  const items = sanitizeScentMissionWardrobe(
+    scopeRowsWithMe(rows, withMe)
+      .map((row) => missionItemFromWardrobeRow(row.id, row.fragranceData))
+      .filter((item) => item !== null),
+  );
+  return { enabled: withMe.enabled, totalCount: rows.length, items };
+}
+
+async function loadAvailableWardrobePackets(ctx: BeamRunContext) {
+  const [rows, withMe] = await Promise.all([
+    db
+      .select({ id: userFragrancesTable.id, fragranceData: userFragrancesTable.fragranceData })
+      .from(userFragrancesTable)
+      .where(and(eq(userFragrancesTable.tenantId, ctx.tenantId), eq(userFragrancesTable.userId, ctx.userId)))
+      .orderBy(asc(userFragrancesTable.createdAt), asc(userFragrancesTable.id)),
+    loadWithMeState(ctx.tenantId, ctx.userId),
+  ]);
+  const items = scopeRowsWithMe(rows, withMe)
+    .map((row) => packetFromWardrobeRow(row.id, row.fragranceData))
+    .filter((packet): packet is CandidatePacket => packet !== null);
+  return { enabled: withMe.enabled, totalCount: rows.length, items };
+}
+
 /**
  * Resolve ONE catalog fragrance to its flattened profile: exact brand+name first,
  * then a top-hit search fallback. Mirrors the in-process route so the MCP surface
@@ -185,6 +219,8 @@ export function createBeamServiceDeps(): BeamToolDeps {
     loadVault,
     loadVaultForOwnership,
     loadWardrobePackets,
+    loadAvailableVault,
+    loadAvailableWardrobePackets,
     searchCatalog: searchCatalogForBeam,
     // External discovery mirrors the in-process route, gated on the same env flag.
     // H1: these startup-built deps have no per-run ctx, so instead of an unbounded

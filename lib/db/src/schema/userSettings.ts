@@ -73,6 +73,12 @@ export const userSettingsTable = pgTable(
     dislikedFamilies: jsonb("disliked_families").$type<string[]>(),
     scentLastsOnMe: text("scent_lasts_on_me"),
     projectionPreference: text("projection_preference"),
+    // Optional physical-availability scope for immediate recommendations.
+    // False keeps legacy/full-vault behavior. True means recommendation lanes
+    // must use only rows present in user_fragrance_with_me; an empty set is a
+    // deliberate "nothing with me" state, not a fallback to the full vault.
+    withMeEnabled: boolean("with_me_enabled").notNull().default(false),
+    withMeUpdatedAt: timestamp("with_me_updated_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -87,4 +93,3 @@ export const userSettingsRelations = relations(userSettingsTable, ({ one }) => (
 }));
 
 export type UserSettings = typeof userSettingsTable.$inferSelect;
-

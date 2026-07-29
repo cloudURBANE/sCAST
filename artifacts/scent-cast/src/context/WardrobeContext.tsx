@@ -7,6 +7,13 @@ import type { BottleImageAdjustment } from '@/lib/bottleImageAdjustment';
 import { reconcileWardrobeItems } from '@/lib/wardrobeReconcile';
 import { displayableVaultImageUrl } from '@/lib/vaultImagePolicy';
 import { vaultIdentityKey } from '@/lib/vaultIdentity';
+import {
+  EMPTY_WITH_ME_STATE,
+  effectiveWithMeItems,
+  reconcileWithMeIds,
+  withMeItemId,
+  type WithMeState,
+} from '@/lib/withMe';
 import { resolveFragranceFacts, usefulFragranceFact } from '@/lib/fragranceFacts';
 import {
   addWardrobeImageTarget,
@@ -47,6 +54,7 @@ import {
 // local marker only suppresses flicker before the server responds.
 const ONBOARDING_STORAGE_KEY = 'scent_onboarding_completed';
 const GUEST_WARDROBE_STORAGE_KEY = 'scent_guest_wardrobe_items';
+const GUEST_WITH_ME_STORAGE_KEY = 'scent_guest_with_me';
 const WARDROBE_ONBOARDING_THRESHOLD = 3;
 // How many guest-added fragrances before we interrupt with the sign-in modal.
 // Raised from 2 → 5 so a guest can meaningfully try the product (build a small
@@ -219,6 +227,56 @@ function writeGuestWardrobeItems(items: Fragrance[]): void {
     localStorage.setItem(GUEST_WARDROBE_STORAGE_KEY, JSON.stringify(items));
   } catch {
     /* storage unavailable (private mode / quota) - keep in-memory state only */
+  }
+}
+
+type GuestWithMeStorage = { enabled: boolean; identityKeys: string[] };
+
+function readGuestWithMeStorage(): GuestWithMeStorage {
+  if (typeof localStorage === 'undefined') return { enabled: false, identityKeys: [] };
+  try {
+    const parsed = JSON.parse(localStorage.getItem(GUEST_WITH_ME_STORAGE_KEY) ?? 'null') as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { enabled: false, identityKeys: [] };
+    }
+    const record = parsed as Record<string, unknown>;
+    return {
+      enabled: record.enabled === true,
+      identityKeys: Array.isArray(record.identityKeys)
+        ? [...new Set(record.identityKeys.filter((value): value is string => typeof value === 'string' && value.length > 0))]
+        : [],
+    };
+  } catch {
+    return { enabled: false, identityKeys: [] };
+  }
+}
+
+function guestWithMeStateForItems(items: Fragrance[]): WithMeState {
+  const stored = readGuestWithMeStorage();
+  const selectedKeys = new Set(stored.identityKeys);
+  return {
+    enabled: stored.enabled,
+    fragranceIds: items
+      .filter((item) => selectedKeys.has(vaultIdentityKey(item.brand ?? item.house ?? item.product?.brand, item.name ?? item.product?.name)))
+      .map(withMeItemId),
+    updatedAt: null,
+    loaded: true,
+  };
+}
+
+function writeGuestWithMeState(state: Pick<WithMeState, 'enabled' | 'fragranceIds'>, items: Fragrance[]): void {
+  if (typeof localStorage === 'undefined') return;
+  const selected = new Set(state.fragranceIds);
+  const identityKeys = state.enabled
+    ? items
+        .filter((item) => selected.has(withMeItemId(item)))
+        .map((item) => vaultIdentityKey(item.brand ?? item.house ?? item.product?.brand, item.name ?? item.product?.name))
+        .filter(Boolean)
+    : [];
+  try {
+    localStorage.setItem(GUEST_WITH_ME_STORAGE_KEY, JSON.stringify({ enabled: state.enabled, identityKeys }));
+  } catch {
+    /* storage unavailable - keep in-memory state only */
   }
 }
 
@@ -1101,6 +1159,7 @@ export type WardrobeAddResult = {
 
 interface WardrobeContextType {
   items: Fragrance[];
+  withMeState: WithMeState;
   wardrobeLoaded: boolean;
   onboardingCompleted: boolean;
   /** False until app-state has been fetched for the signed-in user (guests: true). */
@@ -1175,6 +1234,7 @@ interface WardrobeContextType {
   ) => Promise<Fragrance | null>;
   handleRevertWardrobe: () => void;
   handleDeleteItem: (target: Fragrance) => Promise<void>;
+  saveWithMe: (next: { enabled: boolean; fragranceIds: string[] }) => Promise<void>;
   handleIntentComplete: (intent: { destination: DestinationType; energy: EnergyState }) => void;
   closeRecommendationOverlay: () => void;
   handleVaultSearchStateChange: (active: boolean) => void;
@@ -1204,6 +1264,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [items, setItems] = useState<Fragrance[]>(() =>
     authToken ? [] : readGuestWardrobeItems(),
+  );
+  const [withMeState, setWithMeState] = useState<WithMeState>(() =>
+    authToken ? EMPTY_WITH_ME_STATE : guestWithMeStateForItems(readGuestWardrobeItems()),
   );
   const [wardrobeLoaded, setWardrobeLoaded] = useState(false);
   const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(false);
@@ -1262,12 +1325,14 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // metadata can remain queued during backoff or after work has stopped.
   const [detailRefreshKeys, setDetailRefreshKeys] = useState<Set<string>>(() => new Set());
   const itemsRef = useRef(items);
+  const withMeStateRef = useRef(withMeState);
   const authTokenRef = useRef(authToken);
   const previousGuestPersistenceAuthRef = useRef(authToken);
   // Once-per-sign-in guard so the guest→server wardrobe migration runs exactly
   // once for a given token, even if the load effect re-runs.
   const guestMigrationTokenRef = useRef<string | null>(null);
   itemsRef.current = items;
+  withMeStateRef.current = withMeState;
   authTokenRef.current = authToken;
 
   useEffect(() => {
@@ -1283,6 +1348,17 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     writeGuestWardrobeItems(items);
     previousGuestPersistenceAuthRef.current = authToken;
+  }, [authToken, items]);
+
+  useEffect(() => {
+    setWithMeState((current) => {
+      if (!current.loaded) return current;
+      const fragranceIds = reconcileWithMeIds(items, current.fragranceIds);
+      if (fragranceIds.length === current.fragranceIds.length) return current;
+      const next = { ...current, fragranceIds };
+      if (!authToken) writeGuestWithMeState(next, items);
+      return next;
+    });
   }, [authToken, items]);
 
   const handleVaultSearchStateChange = useCallback((active: boolean) => {
@@ -1364,12 +1440,35 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (opts?.conditional && wardrobeEtagRef.current) {
         headers['If-None-Match'] = wardrobeEtagRef.current;
       }
-      const res = await fetch('/api/wardrobe', { headers, signal });
-      if (res.status === 304) {
+      const [res, withMeRes] = await Promise.all([
+        fetch('/api/wardrobe', { headers, signal }),
+        fetch('/api/wardrobe/with-me', {
+          headers: { Authorization: `Bearer ${token}` },
+          signal,
+        }),
+      ]);
+      if (withMeRes.ok) {
+        if (!isMutatingRef.current) {
+          const raw = (await withMeRes.json()) as Partial<WithMeState>;
+          const loadedWithMe: WithMeState = {
+            enabled: raw.enabled === true,
+            fragranceIds: Array.isArray(raw.fragranceIds)
+              ? raw.fragranceIds.filter((id): id is string => typeof id === 'string')
+              : [],
+            updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+            loaded: true,
+          };
+          withMeStateRef.current = loadedWithMe;
+          setWithMeState(loadedWithMe);
+        }
+      } else if (withMeRes.status !== 401) {
+        setWithMeState((current) => ({ ...current, loaded: true }));
+      }
+      if (res.status === 304 && withMeRes.status !== 401) {
         // Server confirmed our copy is current — leave items untouched.
         return;
       }
-      if (res.status === 401) {
+      if (res.status === 401 || withMeRes.status === 401) {
         // Token is missing/stale (e.g. left over from a DB reset). The backend
         // rejected it, so this is not a network problem; clear the dead token
         // and re-prompt login instead of looping on a generic "sync failed".
@@ -1786,6 +1885,11 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     if (!authToken) {
       guestMigrationTokenRef.current = null;
     }
+    setWithMeState(
+      authToken
+        ? EMPTY_WITH_ME_STATE
+        : guestWithMeStateForItems(readGuestWardrobeItems()),
+    );
     // Clear admin until app-state reconfirms it for the new token (and on sign-out).
     setIsAdmin(false);
   }, [authToken]);
@@ -1870,9 +1974,12 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 ) === savedKey,
             )
           ) {
+            itemsRef.current = prev;
             return prev;
           }
-          return [savedItem, ...prev];
+          const next = [savedItem, ...prev];
+          itemsRef.current = next;
+          return next;
         });
       } catch {
         allHandled = false;
@@ -1889,6 +1996,37 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, []);
 
+  const migrateGuestWithMe = useCallback(async (token: string, guestState: GuestWithMeStorage) => {
+    if (!guestState.enabled) {
+      try { localStorage.removeItem(GUEST_WITH_ME_STORAGE_KEY); } catch { /* ignore */ }
+      return;
+    }
+    const wantedKeys = new Set(guestState.identityKeys);
+    const mappedIds = itemsRef.current
+      .filter((item) => wantedKeys.has(vaultIdentityKey(item.brand ?? item.house ?? item.product?.brand, item.name ?? item.product?.name)))
+      .flatMap((item) => item._dbId ? [item._dbId] : []);
+    const current = withMeStateRef.current;
+    const fragranceIds = [...new Set([...(current.enabled ? current.fragranceIds : []), ...mappedIds])];
+    const res = await fetch('/api/wardrobe/with-me', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ enabled: true, fragranceIds, updatedAt: current.updatedAt }),
+    });
+    const data = (await res.json().catch(() => null)) as Partial<WithMeState> | null;
+    if (!res.ok || !data) return;
+    const saved: WithMeState = {
+      enabled: data.enabled === true,
+      fragranceIds: Array.isArray(data.fragranceIds)
+        ? data.fragranceIds.filter((id): id is string => typeof id === 'string')
+        : [],
+      updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,
+      loaded: true,
+    };
+    withMeStateRef.current = saved;
+    setWithMeState(saved);
+    try { localStorage.removeItem(GUEST_WITH_ME_STORAGE_KEY); } catch { /* ignore */ }
+  }, []);
+
   // Load wardrobe & share settings on login
   useEffect(() => {
     const abortController = new AbortController();
@@ -1898,6 +2036,8 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // into the account instead of discarding it.
       const guestItems =
         guestMigrationTokenRef.current !== authToken ? readGuestWardrobeItems() : [];
+      const guestWithMe =
+        guestMigrationTokenRef.current !== authToken ? readGuestWithMeStorage() : { enabled: false, identityKeys: [] };
       setWardrobeLoaded(false);
       setItems([]);
       void (async () => {
@@ -1909,6 +2049,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         ) {
           guestMigrationTokenRef.current = authToken;
           await migrateGuestWardrobe(authToken, guestItems);
+          if (authTokenRef.current === authToken && !abortController.signal.aborted) {
+            await migrateGuestWithMe(authToken, guestWithMe);
+          }
         }
       })();
       fetch('/api/share-settings', {
@@ -1930,7 +2073,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     return () => abortController.abort();
-  }, [authToken, loadWardrobe, migrateGuestWardrobe, toast]);
+  }, [authToken, loadWardrobe, migrateGuestWardrobe, migrateGuestWithMe, toast]);
 
   // Durable onboarding/discovery state. Fetched independently of /api/wardrobe so
   // a slow or empty wardrobe load cannot flash the add-3 flow at a completed user.
@@ -3006,18 +3149,98 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, [authToken, loadWardrobe, toast]);
 
+  const saveWithMe = useCallback(async (next: { enabled: boolean; fragranceIds: string[] }) => {
+    const currentItems = itemsRef.current;
+    const requested = reconcileWithMeIds(currentItems, next.fragranceIds);
+    if (!authToken) {
+      const saved: WithMeState = {
+        enabled: next.enabled,
+        fragranceIds: next.enabled ? requested : [],
+        updatedAt: null,
+        loaded: true,
+      };
+      setWithMeState(saved);
+      writeGuestWithMeState(saved, currentItems);
+      toast({
+        title: "With Me updated",
+        description: saved.enabled
+          ? saved.fragranceIds.length > 0
+            ? `ScentBeam will choose from ${saved.fragranceIds.length} ${saved.fragranceIds.length === 1 ? 'bottle' : 'bottles'}.`
+            : "No owned bottle is marked as being with you."
+          : "ScentBeam will use your full Vault.",
+      });
+      return;
+    }
+
+    // Signed-in membership is keyed only by canonical server row UUIDs. A just-
+    // added optimistic item without `_dbId` stays unchecked until its save lands.
+    const ownedRowIds = new Set(currentItems.flatMap((item) => item._dbId ? [item._dbId] : []));
+    const fragranceIds = next.enabled ? requested.filter((id) => ownedRowIds.has(id)) : [];
+    isMutatingRef.current = true;
+    try {
+      const res = await fetch('/api/wardrobe/with-me', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          enabled: next.enabled,
+          fragranceIds,
+          updatedAt: withMeStateRef.current.updatedAt,
+        }),
+      });
+      const data = (await res.json().catch(() => null)) as (Partial<WithMeState> & { error?: string }) | null;
+      if (res.status === 409 && data) {
+        setWithMeState({
+          enabled: data.enabled === true,
+          fragranceIds: Array.isArray(data.fragranceIds)
+            ? data.fragranceIds.filter((id): id is string => typeof id === 'string')
+            : [],
+          updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,
+          loaded: true,
+        });
+        throw new Error('With Me changed in another session. The latest set is shown; review and save again.');
+      }
+      if (!res.ok || !data) {
+        throw new Error(data?.error || `With Me save failed: HTTP ${res.status}`);
+      }
+      const saved: WithMeState = {
+        enabled: data.enabled === true,
+        fragranceIds: Array.isArray(data.fragranceIds)
+          ? data.fragranceIds.filter((id): id is string => typeof id === 'string')
+          : [],
+        updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,
+        loaded: true,
+      };
+      setWithMeState(saved);
+      toast({
+        title: "With Me updated",
+        description: saved.enabled
+          ? saved.fragranceIds.length > 0
+            ? `ScentBeam will choose from ${saved.fragranceIds.length} ${saved.fragranceIds.length === 1 ? 'bottle' : 'bottles'}.`
+            : "No owned bottle is marked as being with you."
+          : "ScentBeam will use your full Vault.",
+      });
+    } finally {
+      isMutatingRef.current = false;
+      lastMutationRef.current = Date.now();
+    }
+  }, [authToken, toast]);
+
   const handleIntentComplete = useCallback((intent: { destination: DestinationType; energy: EnergyState }) => {
     setIsIntentModalOpen(false);
-    if (items.length === 0) return;
+    const availableItems = effectiveWithMeItems(items, withMeState);
+    if (availableItems.length === 0) return;
 
-    const winner = calculateEngineAlignment(items, intent, weather, scentPreferences);
+    const winner = calculateEngineAlignment(availableItems, intent, weather, scentPreferences);
     if (!winner) return;
 
     lastIntentRef.current = intent;
     setActiveEngineRecommendation(winner.recommendation);
     setRecommendationReason(winner.recommendation.explanation);
     setActiveRecommendation(winner.item);
-  }, [items, weather, scentPreferences]);
+  }, [items, weather, scentPreferences, withMeState]);
 
   // Keep the surfaced pick honest when conditions move. The recommendation is
   // computed once on intent submission; without this, a later weather refresh
@@ -3026,22 +3249,30 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // Re-score against the same intent whenever weather changes while a pick is
   // displayed. Cleared on close so it no-ops otherwise.
   //
-  // We intentionally depend on `weather` ONLY (reading the current wardrobe via
-  // itemsRef). Depending on `items` re-ran this on every background mutation
+  // We intentionally avoid depending on `items` (the current wardrobe is read via
+  // itemsRef). Depending on it re-ran this on every background mutation
   // (60s reconcile poll, image backfill merge, enrichment write) and would
   // reassign activeRecommendation to a possibly-different winner mid-view,
   // silently swapping the fragrance the user is reading and resetting overlay
-  // scroll. Weather is the only signal that should re-score an open pick.
+  // scroll. Weather, preferences, and an explicit With Me change are the only
+  // signals that should re-score an open pick.
+  const withMeScoringSignature = `${withMeState.enabled ? '1' : '0'}:${withMeState.fragranceIds.join('|')}`;
   useEffect(() => {
     const intent = lastIntentRef.current;
-    const currentItems = itemsRef.current;
-    if (!intent || currentItems.length === 0) return;
+    const currentItems = effectiveWithMeItems(itemsRef.current, withMeStateRef.current);
+    if (!intent) return;
+    if (currentItems.length === 0) {
+      setActiveRecommendation(null);
+      setActiveEngineRecommendation(null);
+      setRecommendationReason('');
+      return;
+    }
     const winner = calculateEngineAlignment(currentItems, intent, weather, scentPreferences);
     if (!winner) return;
     setActiveEngineRecommendation(winner.recommendation);
     setRecommendationReason(winner.recommendation.explanation);
     setActiveRecommendation(winner.item);
-  }, [weather, scentPreferences]);
+  }, [weather, scentPreferences, withMeScoringSignature]);
 
   const closeRecommendationOverlay = useCallback(() => {
     lastIntentRef.current = null;
@@ -3093,6 +3324,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const contextValue = useMemo<WardrobeContextType>(() => ({
     items,
+    withMeState,
     wardrobeLoaded,
     onboardingCompleted,
     onboardingResolved,
@@ -3135,6 +3367,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     handleVerifyWardrobeFact,
     handleRevertWardrobe,
     handleDeleteItem,
+    saveWithMe,
     handleIntentComplete,
     closeRecommendationOverlay,
     handleVaultSearchStateChange,
@@ -3143,6 +3376,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     clearPendingDetailOpen,
   }), [
     items,
+    withMeState,
     wardrobeLoaded,
     onboardingCompleted,
     onboardingResolved,
@@ -3177,6 +3411,7 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     handleVerifyWardrobeFact,
     handleRevertWardrobe,
     handleDeleteItem,
+    saveWithMe,
     handleIntentComplete,
     closeRecommendationOverlay,
     handleVaultSearchStateChange,

@@ -52,6 +52,8 @@ import { vaultIdentityKey } from '@/lib/vaultIdentity';
 import { betaVideoUrlForFragrance } from '@/lib/bottleVideoBeta';
 import { BrandGoldLabel } from '@/components/BrandGoldLabel';
 import { VaultGridModeToggle } from '@/components/VaultGridModeToggle';
+import { VaultWithMeSelector } from '@/components/VaultWithMeSelector';
+import { withMeItemId, type WithMeState } from '@/lib/withMe';
 import { ScentNotesInfographic } from '@/components/ScentNotesInfographic';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { useRenderBudget } from '@/hooks/useRenderBudget';
@@ -1078,6 +1080,8 @@ type MetricFactField = 'year' | 'gender' | 'concentration' | 'season';
 
 export const Wardrobe: React.FC<{
   items: Fragrance[];
+  withMeState: WithMeState;
+  onSaveWithMe: (next: { enabled: boolean; fragranceIds: string[] }) => Promise<void>;
   onDelete: (item: Fragrance) => void | Promise<void>;
   /**
    * Add a fragrance to the vault through the normal wardrobe-add path (App's
@@ -1146,6 +1150,8 @@ export const Wardrobe: React.FC<{
   onImageError?: (item: Fragrance, imageUrl: string) => void;
 }> = ({
   items,
+  withMeState,
+  onSaveWithMe,
   onDelete,
   onAdd,
   pendingDetailOpen,
@@ -2134,11 +2140,19 @@ export const Wardrobe: React.FC<{
             <p className="mx-auto max-w-md text-[15px] leading-relaxed text-scent-text-muted sm:text-base">
               Your collection — the signal behind every recommendation.
             </p>
-            <div className="flex justify-center" role="status" aria-live="polite" aria-atomic="true">
-              <span className="inline-flex items-center gap-2 rounded-full border border-scent-accent/26 bg-scent-surface/50 px-4 py-1.5 shadow-[inset_0_1px_0_rgba(255,236,183,0.08)]">
-                <span className="font-mono text-[11px] font-semibold tabular-nums text-scent-accent">{filteredItems.length}</span>
-                <span className="scent-type-label text-scent-accent/80">{filteredItems.length === 1 ? 'Entry' : 'Entries'}</span>
-              </span>
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <div role="status" aria-live="polite" aria-atomic="true">
+                <span className="inline-flex items-center gap-2 rounded-full border border-scent-accent/26 bg-scent-surface/50 px-4 py-1.5 shadow-[inset_0_1px_0_rgba(255,236,183,0.08)]">
+                  <span className="font-mono text-[11px] font-semibold tabular-nums text-scent-accent">{filteredItems.length}</span>
+                  <span className="scent-type-label text-scent-accent/80">{filteredItems.length === 1 ? 'Entry' : 'Entries'}</span>
+                </span>
+              </div>
+              <VaultWithMeSelector
+                items={items}
+                state={withMeState}
+                onSave={onSaveWithMe}
+                onAddFragrance={() => onExpandArchive?.({ target: 'vault' })}
+              />
             </div>
           </div>
           <div className="flex flex-col items-center gap-6 w-full">
@@ -3456,6 +3470,11 @@ export const Wardrobe: React.FC<{
                 )}
                 {addError && (
                   <p role="alert" className="text-sm text-red-100 text-center leading-snug px-2 py-1">{addError}</p>
+                )}
+                {deleteConfirming && selectedItem && withMeState.enabled && withMeState.fragranceIds.includes(withMeItemId(selectedItem)) && (
+                  <p role="status" className="text-xs text-scent-text-muted text-center leading-snug px-2">
+                    This also removes the bottle from With Me. Your other With Me selections stay unchanged.
+                  </p>
                 )}
 
 

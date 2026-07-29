@@ -71,6 +71,7 @@ import { BeamMessage } from '@/components/BeamMessage';
 import { BeamCard } from '@/components/BeamCard';
 import { BottleImage } from '@/components/BottleImage';
 import type { Fragrance } from '@/components/Wardrobe';
+import { effectiveWithMeItems, type WithMeState } from '@/lib/withMe';
 import type { WeatherData } from '@/context/WeatherContext';
 import type { CurateCollectionResult } from '@/lib/collectionCuration';
 import { useDragToScroll } from '@/hooks/useDragToScroll';
@@ -991,6 +992,7 @@ export type CurateCollectionFn = (
 
 interface ScentMissionPanelProps {
   items: Fragrance[];
+  withMeState: WithMeState;
   weather: WeatherData | null;
   authToken: string | null;
   /** Leave Beam Agent mode and restore the search interior. */
@@ -1241,6 +1243,7 @@ const MissionMessageRow = React.memo(MissionMessageRowComponent);
 
 export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
   items,
+  withMeState,
   weather,
   authToken,
   onExit,
@@ -1941,7 +1944,8 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
             mission: missionState,
             context: {
               weather: buildMissionWeather(weather),
-              wardrobe: buildMissionWardrobe(items),
+              wardrobe: buildMissionWardrobe(effectiveWithMeItems(items, withMeState)),
+              wardrobeAvailability: { enabled: withMeState.enabled },
             },
           }),
         });
@@ -1964,7 +1968,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
         window.clearTimeout(timeoutId);
       }
     },
-    [authToken, items, weather],
+    [authToken, items, weather, withMeState],
   );
 
   // Conversational turns go to the live Beam Agent (tool-calling, grounded in the
