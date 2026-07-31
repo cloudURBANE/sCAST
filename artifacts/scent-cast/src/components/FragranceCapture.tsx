@@ -1252,15 +1252,15 @@ export const FragranceCapture: React.FC<{
       animate={{ opacity: 1, y: 0 }}
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 24 }}
       transition={{ duration: 0.26, ease: SCENT_EASE_OUT }}
-      className="fixed inset-x-0 bottom-[calc(var(--mobile-nav-offset,var(--bottomnav-h))+0.35rem)] z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent px-4 pb-2 pt-6 sm:hidden transition-[bottom] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]"
+      className="fixed inset-x-0 bottom-[calc(var(--mobile-nav-offset,var(--bottomnav-h))+0.35rem)] z-[120] bg-gradient-to-t from-scent-bg via-scent-bg/95 to-transparent pb-2 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] pt-6 transition-[bottom] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] sm:hidden"
     >
       <div className="mx-auto w-full max-w-[39.75rem]">
         <button
           type="button"
           onClick={handlePrimaryAction}
-          className="scent-vault-outline-button flex h-[54px] w-full cursor-pointer items-center justify-center px-4 transition-transform hover:scale-[1.01] active:scale-[0.98]"
+          className="scent-vault-outline-button scent-command-control flex w-full cursor-pointer items-center justify-center px-5 transition-transform hover:scale-[1.01] active:scale-[0.98]"
         >
-          <span className="scent-vault-outline-button-label font-serif italic text-[1.22rem] leading-tight text-center">
+          <span className="scent-vault-outline-button-label text-center text-sm font-semibold tracking-[0.025em]">
             {selectedInVault ? 'View in vault' : 'Add to Vault'}
           </span>
         </button>
@@ -1362,11 +1362,10 @@ export const FragranceCapture: React.FC<{
               // long variant clipped mid-word ("…fragra") on phones.
               placeholder={searchFocused ? '' : 'Search fragrances...'}
               aria-label="Look up a brand or fragrance"
-              // 56→50px (design review: the field was the most oversized
-              // element left on the phone canvas; 50px keeps a comfortable
-              // 44px+ tap height). Placeholder drops a weight step so it reads
-              // as an invitation, not CTA copy.
-              className="scent-lux-input scent-vault-search-input relative z-0 h-[50px] w-full text-center font-sans text-base font-medium text-foreground outline-none transition-colors placeholder:text-scent-text-subtle placeholder:font-normal sm:h-[60px] scroll-mt-28 px-16 sm:px-[4.35rem]"
+              // The search field and every action that continues this discovery
+              // flow share the responsive command-control height. Placeholder
+              // remains a weight step below entered text.
+              className="scent-lux-input scent-vault-search-input scent-command-control relative z-0 w-full scroll-mt-28 px-16 text-center font-sans text-base font-medium text-foreground outline-none transition-colors placeholder:font-normal placeholder:text-scent-text-subtle sm:px-[4.35rem]"
             />
             <m.button
               type="submit"
@@ -1669,7 +1668,7 @@ export const FragranceCapture: React.FC<{
                     panel can run past the fold, so the CTA is instead rendered as a
                     fixed bottom bar (portaled to escape the panel's overflow:hidden)
                     — see `mobileActionBar`. */}
-                <div ref={actionBarRef} className="mx-auto mt-5 hidden w-full max-w-[49.75rem] shrink-0 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:mt-6 sm:block">
+                <div ref={actionBarRef} className="mx-auto mt-5 hidden w-full max-w-[42.75rem] shrink-0 pb-[max(0.15rem,env(safe-area-inset-bottom))] sm:mt-6 sm:block">
                   <AnimatePresence>
                     {hasSelectedMatch ? (
                       <m.p
@@ -1686,9 +1685,9 @@ export const FragranceCapture: React.FC<{
                     type="button"
                     onClick={handlePrimaryAction}
                     disabled={uploading || !hasSelectedMatch}
-                    className="scent-vault-outline-button mt-3 flex h-[60px] w-full items-center justify-center px-4 font-serif italic text-base transition-[color,background-color,border-color,box-shadow,opacity,transform] hover:scale-[1.01] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:mt-5 sm:h-[74px] sm:text-lg disabled:pointer-events-none disabled:opacity-62"
+                    className="scent-vault-outline-button scent-command-control mt-3 flex w-full items-center justify-center px-5 transition-[color,background-color,border-color,box-shadow,opacity,transform] hover:scale-[1.01] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55 sm:mt-5 disabled:pointer-events-none disabled:opacity-62"
                   >
-                    <span className="scent-vault-outline-button-label font-serif italic text-[1.35rem] leading-tight text-center sm:text-[1.8rem]">
+                    <span className="scent-vault-outline-button-label text-center text-sm font-semibold tracking-[0.025em] sm:text-[15px]">
                       {selectedInVault ? 'View in vault' : hasSelectedMatch ? 'Add to Vault' : 'Select a Result'}
                     </span>
                   </button>

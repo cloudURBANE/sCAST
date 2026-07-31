@@ -369,38 +369,44 @@ html {
   content: none;
 }
 
-/* "Discover With Beam Agent" trigger — the flagship auto-width ghost pill. The
+/* Shared sizing contract for the search, its loading state, the Beam entry,
+   the Beam composer, and result-confirmation actions. These controls are
+   sequential steps in one discovery workflow; one height rhythm keeps
+   their swaps and stacked placement stable across phone and desktop. */
+.scent-command-control {
+  height: 52px;
+  min-height: 52px;
+}
+
+@media (min-width: 640px) {
+  .scent-command-control {
+    height: 60px;
+    min-height: 60px;
+  }
+}
+
+/* "Discover with Beam Agent" trigger — a full-width peer to the search field.
+   It shares the field's geometry while its quieter border and fill preserve
+   the primary/secondary hierarchy without looking like a detached badge. The
    old treatment was a full-width glass slab (blur, gold washes) that matched
    the search input's box and made the top half read as two stacked primary
-   capsules. The agent entry is the secondary action, so it reads as one:
-   a hairline pill hugging its label, no filter — the search input keeps sole
-   ownership of the strong gold up top. Presence comes from INSIDE the surface:
-   a faint gold veil breathing down from the top edge, a hairline rim light on
-   the inner top edge (inset — never a projected gold pool, see
-   $no-projected-gold-glow), and the recurring light sweep below, all clipped
-   by overflow. Hover/press feedback stays border + text + a whisper of accent
-   fill. */
+   capsules; the narrow animated replacement looked undersized and added
+   ornamental motion without clarifying the action. */
 .scent-signature-cta {
   position: relative;
   overflow: hidden;
-  /* A step quieter again (0.24→0.2): the ladder is search input (0.53) ≫
-     this pill ≫ passive panel frames, so the search field is unmistakably the
-     primary action and Beam reads as the premium alternative, not a peer. */
-  border: 1px solid rgb(var(--scent-accent-rgb) / 0.2);
-  background-color: rgba(0, 0, 0, 0.35);
-  /* Interior gold veil: strongest at the top hairline, gone by two-thirds
-     down — dimensionality without competing with the search capsule above. */
+  border: 1px solid rgb(var(--scent-accent-rgb) / 0.32);
+  background-color: rgba(5, 4, 2, 0.76);
   background-image: linear-gradient(
     180deg,
-    rgb(var(--scent-accent-rgb) / 0.08),
-    rgb(var(--scent-accent-rgb) / 0.03) 38%,
-    transparent 66%
+    rgb(var(--scent-accent-rgb) / 0.055),
+    rgb(var(--scent-accent-rgb) / 0.018) 46%,
+    transparent 78%
   );
-  /* Inset-only depth: top rim light + a breath of inner bottom shade. Both
-     live inside the pill, so nothing pools under the surface. */
   box-shadow:
-    inset 0 1px 0 rgba(255, 247, 201, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+    inset 0 1px 0 rgba(255, 247, 201, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
+    0 14px 30px -24px rgba(0, 0, 0, 0.92);
   transition:
     border-color var(--scent-transition-base) var(--scent-ease-out),
     background-color var(--scent-transition-base) var(--scent-ease-out),
@@ -408,70 +414,10 @@ html {
     box-shadow var(--scent-transition-base) var(--scent-ease-out);
 }
 
-/* Keep the label above the sheen layer. */
+/* Keep the label above the dimensional surface. */
 .scent-signature-cta > * {
   position: relative;
   z-index: 1;
-}
-
-/* Gold light sweep, echoing the brand/marquee gold-sheen. Animates the
-   pseudo-element's own transform only — never the button's — so it can't
-   collide with the framer-motion enter/exit. Clipped to the pill by
-   overflow:hidden above. Peaks a step quieter than the old glass-slab sweep so
-   it reads as a glint on a ghost pill, not a wash.
-
-   The sweep plays on mount (when the discover state appears) and then recurs
-   on a long, calm cycle: one ~2.35s pass per 8.4s period, idle in between, so
-   the pill reads as quietly alive rather than a one-and-done flash.
-
-   This runs on EVERY device class, phones and iPads included. The old
-   .scent-touch-perf / .scent-ipad-safari-perf display:none gate here was
-   inherited from the glass-slab era, when the sheen rode on a full-width
-   backdrop-blurred surface; on this small clipped pill the sweep is a single
-   transform+opacity layer with no filters, which is exactly the kind of motion
-   WebKit composites cheaply. prefers-reduced-motion remains the only gate. */
-.scent-signature-cta::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    105deg,
-    transparent 32%,
-    rgba(255, 247, 201, 0.07) 46%,
-    rgba(255, 247, 201, 0.18) 50%,
-    rgba(255, 247, 201, 0.07) 54%,
-    transparent 68%
-  );
-  transform: translateX(-130%);
-  opacity: 0;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .scent-signature-cta::after {
-    animation: scent-cta-sheen 8.4s var(--scent-ease-out) 0.18s infinite both;
-  }
-}
-
-/* Sweep occupies the first 28% of the cycle (~2.35s, the original one-shot
-   tempo); the remaining 72% is idle hold so recurrences stay rare and calm. */
-@keyframes scent-cta-sheen {
-  0% {
-    transform: translateX(-130%);
-    opacity: 0;
-  }
-  4.5% {
-    opacity: 1;
-  }
-  23.5% {
-    opacity: 1;
-  }
-  28%,
-  100% {
-    transform: translateX(130%);
-    opacity: 0;
-  }
 }
 
 /* Hover effects are gated to hover-capable pointers: on touch, WebKit keeps
@@ -479,8 +425,8 @@ html {
    would visibly stick to the button. Keyboard focus stays unguarded. */
 @media (hover: hover) {
   .scent-signature-cta:hover {
-    border-color: rgb(var(--scent-accent-rgb) / 0.55);
-    background-color: rgb(var(--scent-accent-rgb) / 0.06);
+    border-color: rgb(var(--scent-accent-rgb) / 0.58);
+    background-color: rgb(var(--scent-accent-rgb) / 0.07);
     color: #fff7ec;
     /* Rim light wakes up with the border — still inset-only. */
     box-shadow:
@@ -4423,7 +4369,9 @@ input.scent-lux-input:focus-visible {
    a real system-colored outline for just those controls. Scoped entirely to
    forced-colors mode, so the normal rendered look is completely untouched. */
 @media (forced-colors: active) {
+  .scent-beam-composer input:focus-visible,
   .scent-lux-input:focus-visible,
+  .scent-signature-cta:focus-visible,
   .scent-vault-outline-button:focus-visible,
   .scent-primary-button:focus-visible,
   [data-testid="scent-mission-cue-bar"] .scent-primary-button:focus-visible,

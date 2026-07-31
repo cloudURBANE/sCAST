@@ -651,8 +651,8 @@ const HomepageAtmosphereChrome: React.FC = React.memo(() => {
 function HeroVaultContentFallback() {
   return (
     <div className="relative w-full min-w-0" aria-label="Loading fragrance search">
-      <div className="mx-auto mb-6 h-24 max-w-[38rem] animate-pulse rounded-[var(--radius-scent)] bg-white/[0.035] sm:mb-7" />
-      <div className="scent-lux-input mx-auto h-[50px] w-full max-w-[42.75rem] animate-pulse rounded-[var(--radius-scent)] sm:h-[60px]" />
+      <div className="mx-auto mb-2 h-8 max-w-[30rem] animate-pulse rounded-full bg-white/[0.035] sm:mb-4 sm:h-[46px] sm:max-w-[38rem]" />
+      <div className="scent-lux-input scent-command-control mx-auto w-full max-w-[42.75rem] animate-pulse rounded-full" />
     </div>
   );
 }
@@ -662,7 +662,7 @@ function HeroVaultContentFallback() {
 function SignaturePanelFallback() {
   return (
     <div className="flex w-full items-center gap-2" aria-label="Loading signature scent">
-      <div className="scent-lux-input h-[60px] flex-1 animate-pulse rounded-full sm:h-[68px]" />
+      <div className="scent-lux-input scent-command-control flex-1 animate-pulse rounded-full" />
       <div className="h-11 w-11 shrink-0 animate-pulse rounded-full bg-white/[0.05]" />
     </div>
   );
@@ -1303,7 +1303,7 @@ function DashboardView() {
                       exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
                       transition={vaultContentTransition}
                     >
-                      <React.Suspense fallback={<SignaturePanelFallback />}>
+                      <React.Suspense fallback={<HeroVaultContentFallback />}>
                         <FragranceCapture
                           onAdd={handleAddItem}
                           onVaultSearchStateChange={handleVaultSearchStateChange}
@@ -1328,7 +1328,7 @@ function DashboardView() {
                 ref={signatureSectionRef}
                 layout={isMounted ? !calmLayout : false}
                 transition={vaultContentTransition}
-                className="scent-mission-action-slot mt-2 flex min-h-[44px] justify-center sm:mt-3 sm:min-h-[50px]"
+                className="scent-mission-action-slot mt-2.5 flex min-h-[52px] w-full justify-center sm:mt-3 sm:min-h-[60px]"
               >
                 {/* Stable portal host for the Beam Agent cue / Confirm lane.
                     This element stays mounted for the whole time the action slot
@@ -1370,24 +1370,15 @@ function DashboardView() {
                       // each other's transform.
                       whileTap={reduceMotion ? undefined : { scale: 0.98 }}
                       transition={vaultContentTransition}
-                      // Auto-width ghost pill (was a full-width glass slab that
-                      // duplicated the search input's box): the pill hugs its
-                      // label so the gold input above stays the block's only
-                      // full-width capsule. Height keeps the 44px+ tap target.
-                      // Height/tracking stay one register below the search
-                      // field, but the pill runs LONGER than it is tall-ish
-                      // (owner call: the shrunken px-6 pill read as stubby) —
-                      // generous horizontal padding gives the label room to
-                      // breathe without raising the button's visual weight.
-                      className="scent-signature-cta group inline-flex h-[44px] items-center justify-center rounded-full px-10 text-[11.5px] font-bold uppercase tracking-[0.09em] text-scent-accent focus-visible:outline-none sm:h-[50px] sm:px-12 sm:text-[12.5px] sm:tracking-[0.12em]"
+                      // Search and Beam are two entry paths into the same
+                      // discovery workflow, so they share width, height, radius,
+                      // and breakpoint. Hierarchy comes from the quieter Beam
+                      // border and fill rather than an undersized pill.
+                      className="scent-signature-cta scent-command-control group inline-flex w-full max-w-[42.75rem] items-center justify-center rounded-full px-8 text-[13px] font-semibold tracking-[0.035em] text-scent-accent focus-visible:outline-none sm:px-10 sm:text-sm sm:tracking-[0.045em]"
                       aria-label="Discover with Beam Agent"
                       title="Discover with Beam Agent"
                     >
-                      {/* No leading icon — the label is the sole content so it
-                          centers in the pill. The text-indent equals the
-                          letter-spacing so the trailing tracking gap doesn't pull
-                          the glyphs optically left of center. */}
-                      <span className="[text-indent:0.09em] sm:[text-indent:0.12em]">Discover With Beam Agent</span>
+                      <span>Discover with Beam Agent</span>
                     </m.button>
                   )}
                 </AnimatePresence>
