@@ -2679,7 +2679,7 @@ export const ScentMissionPanel: React.FC<ScentMissionPanelProps> = ({
       <form
         ref={composerFormRef}
         onSubmit={handleSubmit}
-        className="scent-lux-input scent-vault-search-input scent-beam-composer flex h-[58px] w-full items-center gap-2 rounded-full px-2.5 sm:h-[64px] sm:px-3"
+        className="scent-lux-input scent-vault-search-input scent-beam-composer scent-command-control flex w-full items-center gap-2 rounded-full px-2.5 sm:px-3"
       >
         <button
           type="button"
