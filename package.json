@@ -26,11 +26,11 @@
   "private": true,
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.6.0",
+    "eslint": "^10.8.0",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "prettier": "^3.9.5",
+    "prettier": "^3.9.6",
     "typescript": "~5.9.2",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.66.0"
   },
   "pnpm": {
     "overrides": {
