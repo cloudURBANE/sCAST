@@ -106,7 +106,10 @@ registerRoute(
 registerRoute(
   ({ url, request }) =>
     request.method === "GET" &&
-    url.origin === self.location.origin &&
+    (url.origin === self.location.origin ||
+      url.hostname.endsWith("railway.app") ||
+      url.hostname.endsWith("scentbeam.com") ||
+      url.hostname.endsWith("sentientbeam.com")) &&
     url.pathname.startsWith("/api/") &&
     !url.pathname.startsWith("/api/auth"),
   new NetworkFirst({
