@@ -93,7 +93,7 @@ registerRoute(
     cacheName: "fragrance-search",
     networkTimeoutSeconds: 6,
     plugins: [
-      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new CacheableResponsePlugin({ statuses: [200] }),
       new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 60 * 60 * 24, purgeOnQuotaError: true }),
     ],
   }),
@@ -106,17 +106,13 @@ registerRoute(
 registerRoute(
   ({ url, request }) =>
     request.method === "GET" &&
-    (url.origin === self.location.origin ||
-      url.hostname.endsWith("railway.app") ||
-      url.hostname.endsWith("scentbeam.com") ||
-      url.hostname.endsWith("sentientbeam.com")) &&
     url.pathname.startsWith("/api/") &&
     !url.pathname.startsWith("/api/auth"),
   new NetworkFirst({
     cacheName: "api-data",
     networkTimeoutSeconds: 6,
     plugins: [
-      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new CacheableResponsePlugin({ statuses: [200] }),
       new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 60 * 60 * 24, purgeOnQuotaError: true }),
     ],
   }),

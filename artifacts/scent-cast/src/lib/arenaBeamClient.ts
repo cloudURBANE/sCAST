@@ -1,6 +1,9 @@
 import { normalizeApiBaseUrl } from "@/lib/imageProxy";
 
-const API_BASE_URL = normalizeApiBaseUrl(import.meta.env?.VITE_API_BASE_URL as string | undefined);
+const rawApiBase =
+  (import.meta.env?.VITE_API_BASE_URL as string | undefined) ||
+  (import.meta.env?.VITE_API_ORIGIN as string | undefined);
+const API_BASE_URL = normalizeApiBaseUrl(rawApiBase);
 
 function appApiUrl(path: string): string {
   return API_BASE_URL ? `${API_BASE_URL}${path}` : path;

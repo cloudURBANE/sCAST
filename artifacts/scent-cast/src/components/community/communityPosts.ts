@@ -137,7 +137,10 @@ export interface CreateCommunityVoteResult {
   votes: Record<string, number>;
 }
 
-const API_BASE_URL = normalizeApiBaseUrl(import.meta.env?.VITE_API_BASE_URL as string | undefined);
+const rawApiBase =
+  (import.meta.env?.VITE_API_BASE_URL as string | undefined) ||
+  (import.meta.env?.VITE_API_ORIGIN as string | undefined);
+const API_BASE_URL = normalizeApiBaseUrl(rawApiBase);
 const COMMUNITY_POSTS_ROOT_KEY = ['community', 'posts'] as const;
 const COMMUNITY_POST_DETAIL_ROOT_KEY = ['community', 'post-detail'] as const;
 const COMMUNITY_POPULAR_TAGS_ROOT_KEY = ['community', 'popular-tags'] as const;

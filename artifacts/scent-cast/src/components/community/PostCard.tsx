@@ -277,58 +277,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
         ) : null}
       </div>
 
-      {options.length === 2 ? (
-        // Head-to-head standing: both contenders, each with its own share bar.
-        // The leader's bar carries the stronger gold and the crown; the trailer
-        // recedes. Voting itself still lives in the arena.
-        <div className="mt-3.5 w-full max-w-[48rem] space-y-2.5 sm:mt-5">
-          {options.map((option) => {
-            const count = post.votes[option] ?? 0;
-            const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
-            const isLeader = leaderLabel === option;
-            return (
-              <div key={option} className="min-w-0">
-                <div className="flex items-baseline justify-between gap-3">
-                  <p className="flex min-w-0 items-center gap-1.5 font-serif text-base italic leading-tight text-foreground sm:text-lg">
-                    <span className="min-w-0 truncate" title={option}>
-                      {option}
-                    </span>
-                    {isLeader ? (
-                      <Crown
-                        size={14}
-                        strokeWidth={1.8}
-                        className="shrink-0 text-scent-accent"
-                        aria-hidden="true"
-                      />
-                    ) : null}
-                  </p>
-                  <p className="shrink-0 scent-type-meta text-[11px] uppercase text-scent-text-muted sm:text-xs">
-                    {totalVotes > 0 ? `${pct}%` : '·'}
-                  </p>
-                </div>
-                <div
-                  className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-black/60"
-                  role="img"
-                  aria-label={`${option}: ${count} ${count === 1 ? 'vote' : 'votes'}`}
-                >
-                  <span
-                    className={[
-                      'block h-full rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none',
-                      isLeader ? 'bg-scent-accent/75' : 'bg-scent-accent/35',
-                    ].join(' ')}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-          <p className="scent-type-meta text-[11px] uppercase text-scent-text-muted/85">
-            {totalVotes === 0
-              ? 'No votes yet — cast the first'
-              : `${totalVotes} ${totalVotes === 1 ? 'vote' : 'votes'}`}
-          </p>
-        </div>
-      ) : null}
+      <BattleVotes post={post} authToken={authToken} onSignIn={onSignIn} />
 
       {/* Compact footer: the heart reaction sits opposite "Open arena", which is
           the card's single call to action (it replaces the standalone arena row

@@ -101,10 +101,14 @@ app.use(
 // `origin: false` (no CORS headers; same-origin requests are unaffected).
 // Comma-separated exact origins, e.g. "https://app.example.com,http://localhost:5173".
 // routes/imageProxy.ts keeps its own explicit ACAO:* for cross-origin <img> use.
-const allowedOrigins = parseAllowedOrigins(process.env["CORS_ALLOWED_ORIGINS"]);
+const rawOrigins =
+  process.env["CORS_ALLOWED_ORIGINS"] ||
+  process.env["FRONTEND_ORIGINS"] ||
+  process.env["CORS_ORIGIN"];
+const allowedOrigins = parseAllowedOrigins(rawOrigins);
 if (allowedOrigins === false) {
   logger.info(
-    "CORS_ALLOWED_ORIGINS unset — no cross-origin browser access (same-origin SPA unaffected)",
+    "CORS_ALLOWED_ORIGINS, FRONTEND_ORIGINS, and CORS_ORIGIN unset — no cross-origin browser access (same-origin SPA unaffected)",
   );
 }
 app.use(cors({ origin: allowedOrigins, credentials: false }));

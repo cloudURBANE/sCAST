@@ -66,10 +66,10 @@ export function isCrawledImageProvenance(
   if (storagePath.includes(CRAWLED_STORAGE_SEGMENT)) return true;
   const displayUrl = typeof ref.imageUrl === "string" ? ref.imageUrl.toLowerCase() : "";
   if (displayUrl.includes(CRAWLED_STORAGE_SEGMENT)) return true;
+  if (provider === "serper" || provider === "catalog" || provider === "manual" || provider === "external") return false;
   // A raw Fragrantica url as the display url is the un-processed fallback
   // itself, whatever provider label the row carries.
   if (isFragranticaImageUrl(displayUrl || undefined)) return true;
-  if (provider === "serper") return false;
   // Legacy window: engine-crawled Fragrantica images stamped "manual".
   const looksManual = provider === "manual" || storagePath.includes(MANUAL_STORAGE_SEGMENT);
   return looksManual && isFragranticaImageUrl(ref.sourceUrl ?? undefined);

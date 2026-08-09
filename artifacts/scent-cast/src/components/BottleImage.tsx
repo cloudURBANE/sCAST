@@ -222,7 +222,7 @@ const BottleImageComponent: React.FC<BottleImageProps> = ({
 
     if (img.naturalWidth > 0) {
       handleCachedLoad();
-    } else if (loading !== 'lazy' || img.currentSrc) {
+    } else if (loading !== 'lazy' || img.currentSrc || Boolean(img.src)) {
       // `complete && naturalWidth === 0` is ambiguous; `currentSrc` disambiguates
       // it (it is only set once the browser has actually selected and fetched a
       // source for this element):

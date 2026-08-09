@@ -48,7 +48,10 @@ export function normalizeApiBaseUrl(raw: string | undefined, envName = "VITE_API
   return "";
 }
 
-const API_BASE_URL = normalizeApiBaseUrl(import.meta.env?.VITE_API_BASE_URL as string | undefined);
+const rawApiBase =
+  (import.meta.env?.VITE_API_BASE_URL as string | undefined) ||
+  (import.meta.env?.VITE_API_ORIGIN as string | undefined);
+const API_BASE_URL = normalizeApiBaseUrl(rawApiBase);
 
 function apiUrl(path: string, apiBaseUrl = API_BASE_URL): string {
   return apiBaseUrl ? `${apiBaseUrl}${path}` : path;

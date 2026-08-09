@@ -14,7 +14,18 @@ import type { Fragrance } from '@/components/Wardrobe';
 // Relative (not `@/`) so this module — and its test — run under the node test
 // runner, which has no path-alias resolution. (`@/` type-only imports are fine;
 // they're erased at runtime, but `proposalItemToFragrance` is a real value.)
-import { proposalItemToFragrance } from './scentMissionClient.ts';
+import { proposalItemToFragrance } from './scentMissionClient';
+import { normalizeApiBaseUrl } from './imageProxy';
+
+const rawApiBase =
+  (typeof process !== 'undefined' && process.env?.VITE_API_BASE_URL) ||
+  (typeof process !== 'undefined' && process.env?.VITE_API_ORIGIN) ||
+  (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_ORIGIN));
+const API_BASE_URL = normalizeApiBaseUrl(rawApiBase as string | undefined);
+
+function appApiUrl(path: string): string {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
 
 /** One pending/ready beam-curated fragrance, mirrors the api-server contract. */
 export interface CurationItem {
@@ -136,7 +147,7 @@ export function pickResumeCurationTarget(
  */
 export async function getPendingCuration(authToken: string): Promise<CurationItem[]> {
   try {
-    const res = await fetch('/api/beam-agent/curation/pending', {
+    const res = await fetch(appApiUrl('/api/beam-agent/curation/pending'), {
       headers: { Authorization: `Bearer ${authToken}` },
     });
     if (!res.ok) return [];

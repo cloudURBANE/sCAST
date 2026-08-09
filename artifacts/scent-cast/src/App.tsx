@@ -19,7 +19,7 @@ import { PushPrompt } from './components/pwa/PushPrompt';
 import { BadgeClearer } from './components/pwa/BadgeClearer';
 import type { ScentFamily, ScentWeatherRecommendation } from './lib/scentWeatherEngine';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { WeatherProvider, useWeather } from './context/WeatherContext';
+import { WeatherProvider, useWeather, type WeatherData } from './context/WeatherContext';
 import { WardrobeProvider, useWardrobe, useWardrobeItems, useWardrobeShareModalActions, type WardrobeAddResult } from './context/WardrobeContext';
 import { Toaster } from './components/ui/toaster';
 import { PageTransitionOverlay, warmTransitionEmblem } from './components/PageTransitionOverlay';
@@ -179,7 +179,7 @@ const LiveClock: React.FC = React.memo(() => {
 });
 
 interface AtmosphereBarProps {
-  weather: any;
+  weather: WeatherData | Record<string, unknown> | null | undefined;
   weatherLoading: boolean;
 }
 
@@ -478,16 +478,16 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
   };
 
   const getWeatherNumber = (
-    w: any,
+    w: WeatherData | Record<string, unknown> | null | undefined,
     keys: string[],
     fallback: number,
-  ): number => firstFiniteNumber(fallback, ...keys.map((key) => w?.[key]));
+  ): number => firstFiniteNumber(fallback, ...keys.map((key) => (w as Record<string, unknown> | null | undefined)?.[key]));
 
   const getWeatherString = (
-    w: any,
+    w: WeatherData | Record<string, unknown> | null | undefined,
     keys: string[],
     fallback = '',
-  ): string => firstString(...keys.map((key) => w?.[key])) ?? fallback;
+  ): string => firstString(...keys.map((key) => (w as Record<string, unknown> | null | undefined)?.[key])) ?? fallback;
 
   const tempValue = getWeatherNumber(weather, ['temperature_f', 'temperature', 'temp'], Number.NaN);
   const humidityValue = getWeatherNumber(weather, ['humidity_percent', 'humidity'], Number.NaN);

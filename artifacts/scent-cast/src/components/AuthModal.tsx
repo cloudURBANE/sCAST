@@ -1,6 +1,16 @@
 import React from 'react';
 import { m } from 'framer-motion';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
+import { normalizeApiBaseUrl } from '@/lib/imageProxy';
+
+const rawApiBase =
+  (import.meta.env?.VITE_API_BASE_URL as string | undefined) ||
+  (import.meta.env?.VITE_API_ORIGIN as string | undefined);
+const API_BASE_URL = normalizeApiBaseUrl(rawApiBase);
+
+function appApiUrl(path: string): string {
+  return API_BASE_URL ? `${API_BASE_URL}${path}` : path;
+}
 
 interface AuthModalProps {
   onClose?: () => void;
@@ -33,7 +43,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   });
 
   const handleGoogleSignIn = () => {
-    window.location.href = '/api/auth/google';
+    window.location.href = appApiUrl('/api/auth/google');
   };
 
   const handleContinueAsGuest = () => {
