@@ -116,6 +116,7 @@ export function isProcessedStorageImageUrl(url: string, cdnBases: string[] = IMA
 export function proxiedImageUrl(url: string | undefined | null, options?: ProxiedImageOptions): string {
   if (!url) return "";
   let u = url.trim();
+  if (!u || u === "null" || u === "undefined") return "";
   if (u.startsWith("data:")) return u;
   // Protocol-relative CDN URLs: normalize so we route through image-proxy.
   if (u.startsWith("//")) u = `https:${u}`;

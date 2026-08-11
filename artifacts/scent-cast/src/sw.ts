@@ -44,7 +44,12 @@ registerRoute(
 // Google Fonts stylesheet: serve instantly from cache, refresh in background.
 registerRoute(
   ({ url }) => url.origin === "https://fonts.googleapis.com",
-  new StaleWhileRevalidate({ cacheName: "google-fonts-stylesheets" }),
+  new StaleWhileRevalidate({
+    cacheName: "google-fonts-stylesheets",
+    plugins: [
+      new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 30 }),
+    ],
+  }),
 );
 
 // Google Fonts files: effectively immutable — cache for a year.
@@ -55,6 +60,18 @@ registerRoute(
     plugins: [
       new CacheableResponsePlugin({ statuses: [0, 200] }),
       new ExpirationPlugin({ maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365, purgeOnQuotaError: true }),
+    ],
+  }),
+);
+
+// Image Proxy route: proxied image GET requests (/api/image-proxy) land in fragrance-images cache regardless of request.destination
+registerRoute(
+  ({ url, request }) => request.method === "GET" && url.pathname.startsWith("/api/image-proxy"),
+  new CacheFirst({
+    cacheName: "fragrance-images",
+    plugins: [
+      new CacheableResponsePlugin({ statuses: [0, 200] }),
+      new ExpirationPlugin({ maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 14, purgeOnQuotaError: true }),
     ],
   }),
 );
@@ -91,7 +108,7 @@ registerRoute(
   ({ url, request }) => request.method === "GET" && /\/api\/fragrances\/search/.test(url.pathname),
   new NetworkFirst({
     cacheName: "fragrance-search",
-    networkTimeoutSeconds: 6,
+    networkTimeoutSeconds: 3,
     plugins: [
       new CacheableResponsePlugin({ statuses: [200] }),
       new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 60 * 60 * 24, purgeOnQuotaError: true }),
@@ -107,10 +124,11 @@ registerRoute(
   ({ url, request }) =>
     request.method === "GET" &&
     url.pathname.startsWith("/api/") &&
-    !url.pathname.startsWith("/api/auth"),
+    !url.pathname.startsWith("/api/auth") &&
+    !url.pathname.startsWith("/api/image-proxy"),
   new NetworkFirst({
     cacheName: "api-data",
-    networkTimeoutSeconds: 6,
+    networkTimeoutSeconds: 3,
     plugins: [
       new CacheableResponsePlugin({ statuses: [200] }),
       new ExpirationPlugin({ maxEntries: 100, maxAgeSeconds: 60 * 60 * 24, purgeOnQuotaError: true }),

@@ -185,6 +185,13 @@ const BottleImageComponent: React.FC<BottleImageProps> = ({
     clearRetryTimer();
     errorCountRef.current += 1;
 
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setBroken(true);
+      setIsLoading(false);
+      onError?.();
+      return;
+    }
+
     if (retryCount < RETRY_LIMIT) {
       // Jittered exponential backoff to absorb transient proxy/network blips.
       retryTimerRef.current = setTimeout(() => {

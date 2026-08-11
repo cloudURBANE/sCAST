@@ -46,6 +46,12 @@ function WeatherGlyph({ day, size = 22 }: { day: WeatherForecastDay; size?: numb
 }
 
 function forecastDate(iso: string): Date | null {
+  if (!iso) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (match) {
+    const [, y, m, d] = match;
+    return new Date(Number(y), Number(m) - 1, Number(d));
+  }
   const date = new Date(iso);
   return Number.isNaN(date.getTime()) ? null : date;
 }
@@ -440,7 +446,7 @@ function TypedReasonLine({ text }: { text: string }) {
       if (start === null) start = now;
       const elapsed = now - start - TYPE_START_DELAY_MS;
       const next = elapsed <= 0 ? 0 : Math.min(text.length, Math.ceil(elapsed / TYPE_MS_PER_CHAR));
-      setTypedChars(next);
+      setTypedChars((prev) => (prev === next ? prev : next));
       if (next < text.length) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -619,11 +625,7 @@ function ForecastHero({
               type="button"
               onClick={onSelect ? () => onSelect(fragrance) : undefined}
               disabled={!onSelect}
-              // Width share +~6% and a small upward nudge (design review: the
-              // bottle sat slightly small and low beside the denser copy block;
-              // the square is width-capped, so widening the column is the
-              // clip-safe way to grow the packshot optically).
-              className="group forecast-hero-bottle relative h-full w-[57%] max-w-[14.875rem] shrink-0 -translate-y-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[55%] sm:max-w-[16.5rem] md:max-w-[20rem]"
+              className="group forecast-hero-bottle relative h-full w-[46%] max-w-[11.5rem] shrink-0 translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 disabled:cursor-default sm:w-[48%] sm:max-w-[13.5rem] md:max-w-[16rem]"
               aria-label={onSelect ? `Open ${pick.name} by ${pick.brand}` : `${pick.name} by ${pick.brand}`}
             >
               <BottleImage
@@ -632,25 +634,12 @@ function ForecastHero({
                 variant="featured"
                 adjustment={fragrance.imageAdjustment}
                 imageProperties={fragrance.imageProperties}
-                className="h-full w-full [&_.bottle-artboard]:inset-[1%] sm:[&_.bottle-artboard]:inset-[6%]"
+                className="h-full w-full [&_.bottle-artboard]:inset-[6%] sm:[&_.bottle-artboard]:inset-[7%]"
                 imgClassName="transition-transform duration-500 group-hover:scale-[1.03] motion-reduce:transform-none"
                 loading="eager"
               />
             </button>
-            {/* Width-constrained text stack read as ONE unit: CREED eyebrow → name →
-                lead notes. Hierarchy mirrors how a fragrance is billed (house quiet,
-                NAME the headline). The narrow max-width makes the title wrap in a
-                controlled, premium way and NEVER truncate with an ellipsis — a 3-word
-                name like "Silver Mountain Water" breaks after "Mountain", while a
-                tighter name like "Green Irish Tweed" stays balanced on one line.
-                NON-INTERACTIVE by design: the name is not a tap target (see above). */}
-            {/* translate-y nudges the block down a hair from the geometric
-                center: the bottle is vertically centered in its frame, but a
-                bottle's visual mass sits in its lower body, so a dead-centered
-                text column reads as floating slightly HIGH beside it. The small
-                downward shift seats brand/name/notes against the bottle's real
-                optical center so the two halves lock as one unit. */}
-            <div className="flex min-w-0 w-[43%] max-w-[12.5rem] translate-y-[0.3rem] flex-col items-center justify-center self-center text-center sm:w-[45%] sm:max-w-[14rem] sm:translate-y-[0.45rem] md:max-w-[20rem] md:translate-y-[0.6rem]">
+            <div className="flex min-w-0 w-[48%] max-w-[12.5rem] translate-y-0 flex-col items-center justify-center self-center text-center sm:w-[50%] sm:max-w-[14rem] md:max-w-[20rem]">
               {/* text-balance + tighter phone tracking so a long house name
                   ("DOLCE & GABBANA") composes as two even centered lines
                   instead of one ragged break; sm+ keeps the original size and
@@ -897,7 +886,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
             <div
               id="scent-forecast-active-panel"
               role="tabpanel"
-              className="relative flex h-[11.5rem] w-full items-center justify-between gap-1.5 px-1.5 sm:h-[14rem] sm:gap-3 sm:px-2.5 md:h-[17.5rem] md:gap-5 md:px-4"
+              className="relative flex h-[13.5rem] w-full items-center justify-between gap-1.5 px-1.5 py-2 sm:h-[16rem] sm:gap-3 sm:px-2.5 sm:py-3 md:h-[19.5rem] md:gap-5 md:px-4 md:py-4"
             >
               <ForecastChevron direction="prev" onClick={() => go(selected - 1)} />
               <div className="relative h-full flex-1 overflow-hidden">
