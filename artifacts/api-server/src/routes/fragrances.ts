@@ -14,6 +14,7 @@ import { enqueueEnrichmentJob, enrichmentQueueProducerEnabled } from "../service
 import {
   candidateFromProfile,
   candidateFromSourceUrl,
+  cleanQueryParam,
   decodeIdentityId,
   parseFragranceSourceUrl,
   scentFactProfileToDetail,
@@ -114,9 +115,7 @@ function getCachedSourceDetail(cacheKey: string): SourceDetailCacheEntry | null 
   return entry;
 }
 
-function cleanQueryParam(value: unknown): string {
-  return typeof value === "string" ? value.trim().slice(0, 180) : "";
-}
+export { cleanQueryParam };
 
 function searchQueryWithFragranceIntent(query: string): string {
   return /\b(?:cologne|fragrance|perfume|parfum|edt|edp|edc|eau\s+de|extrait)\b/i.test(query)
@@ -607,7 +606,7 @@ router.get("/fragrances/search", fragranceSearchRateLimit, async (req, res) => {
     }
   }
 
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && shouldSearchExternalFragranceSources(query)) {
     try {
       const fallbackQuery = searchQueryWithFragranceIntent(query);
       const { urls, timedOut } = await searchScentSourcesWithResponseBudget(fallbackQuery, { maxCandidates: 16 });

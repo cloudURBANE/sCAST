@@ -45,12 +45,17 @@ function entryBrand(item: WardrobeSuggestionFragranceShape): string {
   return item?.brand || item?.product?.brand || '';
 }
 
+const MAX_WARDROBE_QUERY_LENGTH = 160;
+const MAX_WARDROBE_QUERY_TOKENS = 8;
+
 function tokenizeQuery(value: string): string[] {
   return value
+    .slice(0, MAX_WARDROBE_QUERY_LENGTH)
     .trim()
     .toLowerCase()
     .split(/\s+/)
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, MAX_WARDROBE_QUERY_TOKENS);
 }
 
 function fieldTokenScore(field: string, token: string): number {
@@ -66,7 +71,10 @@ export function scoreWardrobeQueryMatch(
   item: WardrobeSuggestionFragranceShape,
   queryRaw: string,
 ): number {
-  const q = queryRaw.trim().toLowerCase();
+  const q = (typeof queryRaw === 'string' ? queryRaw : '')
+    .slice(0, MAX_WARDROBE_QUERY_LENGTH)
+    .trim()
+    .toLowerCase();
   if (!q) return 0;
 
   const name = entryName(item).toLowerCase();
@@ -118,7 +126,10 @@ export function buildWardrobeSearchSuggestions(
   opts?: { maxFragrances?: number },
 ): WardrobeSearchSuggestion[] {
   const maxFragrances = opts?.maxFragrances ?? 8;
-  const q = queryRaw.trim().toLowerCase();
+  const q = (typeof queryRaw === 'string' ? queryRaw : '')
+    .slice(0, MAX_WARDROBE_QUERY_LENGTH)
+    .trim()
+    .toLowerCase();
   if (!q) return [];
 
   const fragRows = items

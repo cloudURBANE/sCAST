@@ -68,6 +68,11 @@ const refreshImageRateLimit = rateLimitMiddleware({
   limit: envRateLimit("REFRESH_IMAGE_RATE_LIMIT", 20),
   windowMs: 5 * 60_000,
 });
+const sharedImageRateLimit = rateLimitMiddleware({
+  name: "shared-image",
+  limit: envRateLimit("SHARED_IMAGE_RATE_LIMIT", 120),
+  windowMs: 5 * 60_000,
+});
 
 type ConcentrationHint = "edt" | "edp" | "parfum" | "extrait" | "elixir";
 
@@ -166,6 +171,10 @@ router.get("/weather", async (req, res) => {
 });
 
 router.post("/scent-profile", scentProfileRateLimit, async (req, res) => {
+  if (typeof req.body !== "object" || req.body === null) {
+    res.status(400).json({ error: "Request body must be a JSON object" });
+    return;
+  }
   const {
     name,
     brand,
@@ -251,9 +260,11 @@ router.post("/scent-profile", scentProfileRateLimit, async (req, res) => {
 // from the shared catalog without a per-add image search (cost) and without a
 // server-side wardrobe row (guests have none). Returns { imageUrl: null } when
 // nothing is cached yet, so the bounded client poll simply tries again or stops.
-router.get("/shared-image", async (req, res) => {
-  const brand = typeof req.query.brand === "string" ? req.query.brand.trim() : "";
-  const name = typeof req.query.name === "string" ? req.query.name.trim() : "";
+router.get("/shared-image", sharedImageRateLimit, async (req, res) => {
+  const rawBrand = Array.isArray(req.query.brand) ? req.query.brand[0] : req.query.brand;
+  const rawName = Array.isArray(req.query.name) ? req.query.name[0] : req.query.name;
+  const brand = typeof rawBrand === "string" ? rawBrand.trim() : "";
+  const name = typeof rawName === "string" ? rawName.trim() : "";
   if (!name) {
     res.status(400).json({ error: "name is required" });
     return;
@@ -267,6 +278,10 @@ router.get("/shared-image", async (req, res) => {
 });
 
 router.post("/search-scent", searchScentRateLimit, async (req, res) => {
+  if (typeof req.body !== "object" || req.body === null) {
+    res.status(400).json({ error: "Request body must be a JSON object" });
+    return;
+  }
   const { query, concentrationHint } = req.body as { query?: string; concentrationHint?: ConcentrationHint };
   if (!query) {
     res.status(400).json({ error: "Query is required" });
@@ -405,6 +420,10 @@ router.post("/search-scent", searchScentRateLimit, async (req, res) => {
 });
 
 router.post("/refresh-image", refreshImageRateLimit, async (req, res) => {
+  if (typeof req.body !== "object" || req.body === null) {
+    res.status(400).json({ error: "Request body must be a JSON object" });
+    return;
+  }
   const body = req.body as {
     name?: string;
     brand?: string;
@@ -697,6 +716,11 @@ const reimagineRateLimit = rateLimitMiddleware({
 router.post("/reimagine-bottle-image", reimagineRateLimit, async (req, res) => {
   if (process.env.ENABLE_REIMAGINE && process.env.ENABLE_REIMAGINE.trim().toLowerCase() !== "true") {
     res.status(403).json({ error: "Reimagine is disabled in this environment." });
+    return;
+  }
+
+  if (typeof req.body !== "object" || req.body === null) {
+    res.status(400).json({ error: "Request body must be a JSON object" });
     return;
   }
 

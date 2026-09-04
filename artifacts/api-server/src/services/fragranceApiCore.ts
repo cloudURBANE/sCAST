@@ -17,6 +17,16 @@ export type SourceUrlIdentity = {
   name: string;
 };
 
+export function cleanQueryParam(value: unknown): string {
+  const item = Array.isArray(value) ? value[0] : value;
+  if (typeof item !== "string") return "";
+  return item
+    .replace(/[\x00-\x1f\x7f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+}
+
 function cleanSegment(value: string): string {
   return value
     .replace(/\.html?$/i, "")
@@ -106,8 +116,8 @@ export function parseFragranceSourceUrl(value: string): SourceUrlIdentity | null
   };
 }
 
-function encodeIdentityPart(value: string): string {
-  return encodeURIComponent(value.trim());
+function encodeIdentityPart(value: string | null | undefined): string {
+  return encodeURIComponent((typeof value === "string" ? value : "").trim());
 }
 
 export function encodeIdentityId(prefix: "catalog" | "dataset", brand: string, name: string): string {
@@ -160,15 +170,15 @@ export function candidateFromSourceUrl(
 
 export function candidateFromProfile(
   prefix: "catalog" | "dataset",
-  profile: Pick<ScentProfile, "product">,
+  profile: Pick<ScentProfile, "product"> | { product?: { brand?: string | null; name?: string | null } } | null | undefined,
 ): FragranceSearchCandidate {
-  const brand = profile.product.brand;
-  const name = profile.product.name;
+  const brand = (typeof profile?.product?.brand === "string" ? profile.product.brand : "").trim();
+  const name = (typeof profile?.product?.name === "string" ? profile.product.name : "").trim();
   return {
     id: encodeIdentityId(prefix, brand, name),
     name,
-    house: brand,
-    brand,
+    house: brand || undefined,
+    brand: brand || undefined,
     year: null,
     gender: null,
     source_url: null,

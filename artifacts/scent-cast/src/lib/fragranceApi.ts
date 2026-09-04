@@ -215,8 +215,9 @@ export type FragranceDetailRequeueResponse = {
   } | null;
 } & Record<string, unknown>;
 
-function firstNonEmptyString(...values: unknown[]): string | undefined {
+export function firstNonEmptyString(...values: unknown[]): string | undefined {
   for (const value of values) {
+    if (typeof value === "number" && Number.isNaN(value)) continue;
     if (typeof value !== "string" && typeof value !== "number") continue;
     const trimmed = String(value).trim();
     if (trimmed) return trimmed;
@@ -436,12 +437,12 @@ function writeSearchCache(cache: FragranceSearchCache): void {
   }
 }
 
-function getCachedFragranceSearch(query: string): FragranceSearchResponse | null {
+export function getCachedFragranceSearch(query: string): FragranceSearchResponse | null {
   const key = fragranceSearchCacheKey(query);
   if (!key) return null;
   const cache = readSearchCache();
   const entry = cache[key];
-  if (!entry || !Array.isArray(entry.response?.results)) return null;
+  if (!entry || !Number.isFinite(entry.cachedAt) || !Array.isArray(entry.response?.results)) return null;
   if (Date.now() - entry.cachedAt > FRAGRANCE_SEARCH_CACHE_MAX_AGE_MS) {
     delete cache[key];
     writeSearchCache(cache);
@@ -555,16 +556,40 @@ export function normalizeFragranceSearchResult(
   );
   const origin = result.origin === "app" || result.origin === "srt" ? result.origin : fallbackOrigin;
 
+  let year: number | null = null;
+  if (typeof result.year === "number" && Number.isFinite(result.year)) {
+    year = Math.round(result.year);
+  } else if (typeof result.year === "string") {
+    const trimmedYear = result.year.trim();
+    if (/^\d{4}$/.test(trimmedYear)) {
+      const parsedYear = Number.parseInt(trimmedYear, 10);
+      if (Number.isFinite(parsedYear)) {
+        year = parsedYear;
+      }
+    }
+  }
+
+  const bn_positive_pct =
+    typeof result.bn_positive_pct === "number" && Number.isFinite(result.bn_positive_pct)
+      ? result.bn_positive_pct
+      : undefined;
+  const bn_vote_count =
+    typeof result.bn_vote_count === "number" && Number.isFinite(result.bn_vote_count)
+      ? result.bn_vote_count
+      : undefined;
+
   return {
     ...(result as FragranceSearchResult),
     id,
     name,
     house,
     brand: firstNonEmptyString(result.brand, house),
-    year: typeof result.year === "number" ? result.year : null,
+    year,
     gender: typeof result.gender === "string" ? result.gender : null,
     source_url: sourceUrl ?? null,
     origin,
+    ...(result.bn_positive_pct !== undefined ? { bn_positive_pct } : {}),
+    ...(result.bn_vote_count !== undefined ? { bn_vote_count } : {}),
   };
 }
 
@@ -1204,6 +1229,52 @@ export function sanitizeEngineQuery(value: string): string {
     .trim();
 }
 
+function toWellFormedPolyfill(str: string): string {
+  let res = "";
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      if (i + 1 < str.length) {
+        const next = str.charCodeAt(i + 1);
+        if (next >= 0xdc00 && next <= 0xdfff) {
+          res += str[i] + str[i + 1];
+          i++;
+          continue;
+        }
+      }
+      res += "\uFFFD";
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      res += "\uFFFD";
+    } else {
+      res += str[i];
+    }
+  }
+  return res;
+}
+
+/**
+ * Defensive query sanitization for search inputs and network dispatches:
+ * 1. Guarantees well-formed UTF-16 code units via toWellFormed() or polyfill (avoids URIError on encodeURIComponent).
+ * 2. Strips ASCII control characters ([\x00-\x1f\x7f]) including NUL bytes.
+ * 3. Normalizes whitespace runs to a single space and trims edges.
+ * 4. Truncates length to maxLength (default 160) to prevent ReDoS and heavy token loops.
+ */
+export function sanitizeSearchQuery(query: string, maxLength = 160): string {
+  if (typeof query !== "string") return "";
+  const wellFormed =
+    typeof (query as unknown as { toWellFormed?: () => string }).toWellFormed === "function"
+      ? query.toWellFormed()
+      : toWellFormedPolyfill(query);
+  const cleaned = wellFormed
+    .replace(/[\x00-\x1f\x7f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const truncated = cleaned.slice(0, maxLength).trim();
+  return typeof (truncated as unknown as { toWellFormed?: () => string }).toWellFormed === "function"
+    ? truncated.toWellFormed()
+    : toWellFormedPolyfill(truncated);
+}
+
 function expandKnownSearchBrandAlias(query: string): string {
   const normalized = normalizeForDedupe(query);
   if (!normalized) return query.trim();
@@ -1230,7 +1301,8 @@ function searchRankTokens(value: unknown): string[] {
 function tokenCoverage(wanted: string[], candidate: Set<string>): number {
   if (wanted.length === 0) return 0;
   const matched = wanted.filter((token) => candidate.has(token)).length;
-  return matched / wanted.length;
+  const coverage = matched / wanted.length;
+  return Number.isFinite(coverage) ? coverage : 0;
 }
 
 function fragranceIdentityKey(result: FragranceSearchResult): string {
@@ -1329,7 +1401,7 @@ function mergeSearchResults(
   return merged;
 }
 
-function scoreSearchResultForQuery(query: string, result: FragranceSearchResult): number {
+export function scoreSearchResultForQuery(query: string, result: FragranceSearchResult): number {
   const expandedQuery = expandKnownSearchBrandAlias(query);
   const queryTokens = searchRankTokens(expandedQuery);
   if (queryTokens.length === 0) return 0;
@@ -1363,7 +1435,7 @@ function scoreSearchResultForQuery(query: string, result: FragranceSearchResult)
     score -= extraNameTokens * 7;
   }
 
-  return score;
+  return Number.isFinite(score) ? score : 0;
 }
 
 function rankSearchResultsByQuery(
@@ -1498,6 +1570,11 @@ export async function searchFragrances(
   query: string,
   options?: { signal?: AbortSignal },
 ): Promise<FragranceSearchResponse> {
+  const sanitizedQuery = sanitizeSearchQuery(query);
+  if (!sanitizedQuery) {
+    return { query, results: [] };
+  }
+
   const cached = getCachedFragranceSearch(query);
   if (cached) {
     // A synchronous cache hit must still honor a caller that has already moved
@@ -1509,11 +1586,12 @@ export async function searchFragrances(
     return cached;
   }
 
-  let response = await executeFragranceSearch(query, options);
+  let response = await executeFragranceSearch(sanitizedQuery, options);
+  response = { ...response, query };
 
   if (response.results.length === 0) {
-    const sanitized = sanitizeEngineQuery(query);
-    if (sanitized && sanitized.toLowerCase() !== query.trim().toLowerCase()) {
+    const sanitized = sanitizeEngineQuery(sanitizedQuery);
+    if (sanitized && sanitized.toLowerCase() !== sanitizedQuery.toLowerCase()) {
       try {
         const retried = await executeFragranceSearch(sanitized, options, {
           allowAppSearch: false,
@@ -1607,9 +1685,7 @@ async function executeFragranceSearch(
       );
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") throw err;
-      if (response.results.length === 0) {
-        throw err;
-      }
+      console.warn("Supplemental app fragrance search failed:", err);
     }
   }
 
@@ -1617,39 +1693,49 @@ async function executeFragranceSearch(
   return response;
 }
 
+export const APP_SEARCH_TIMEOUT_MS = 10_000;
+
 async function searchAppFragrances(
   query: string,
   options?: { signal?: AbortSignal },
   originalQuery = query,
 ): Promise<FragranceSearchResponse> {
-  const res = await fetch(
-    appApiUrl(`/api/fragrances/search?q=${encodeURIComponent(query)}`),
+  const { init: timedInit, cleanup } = withEngineTimeout(
     { signal: options?.signal },
+    APP_SEARCH_TIMEOUT_MS,
   );
+  try {
+    const res = await fetch(
+      appApiUrl(`/api/fragrances/search?q=${encodeURIComponent(query)}`),
+      timedInit,
+    );
 
-  if (!res.ok) {
-    throw new Error(await apiErrorMessage(res, `App fragrance search failed: ${res.status}`));
+    if (!res.ok) {
+      throw new Error(await apiErrorMessage(res, `App fragrance search failed: ${res.status}`));
+    }
+
+    const data = await parseJsonResponse<unknown>(res, "App fragrance search");
+    const payload = objectRecord(data);
+    const rawResults: unknown[] = Array.isArray(data)
+      ? data
+      : Array.isArray(payload.results)
+        ? (payload.results as unknown[])
+        : [];
+
+    const results = rawResults
+      .map((result) => normalizeFragranceSearchResult(result, query, "app"))
+      .filter((result): result is FragranceSearchResult => {
+        return result !== null && hasDisplayableSearchIdentity(originalQuery, result);
+      });
+
+    return {
+      query: originalQuery,
+      results: rankSearchResultsByQuery(originalQuery, results),
+      diagnostics: normalizeSearchDiagnostics(payload.diagnostics),
+    };
+  } finally {
+    cleanup();
   }
-
-  const data = await parseJsonResponse<unknown>(res, "App fragrance search");
-  const payload = objectRecord(data);
-  const rawResults: unknown[] = Array.isArray(data)
-    ? data
-    : Array.isArray(payload.results)
-      ? (payload.results as unknown[])
-      : [];
-
-  const results = rawResults
-    .map((result) => normalizeFragranceSearchResult(result, query, "app"))
-    .filter((result): result is FragranceSearchResult => {
-      return result !== null && hasDisplayableSearchIdentity(originalQuery, result);
-    });
-
-  return {
-    query: originalQuery,
-    results: rankSearchResultsByQuery(originalQuery, results),
-    diagnostics: normalizeSearchDiagnostics(payload.diagnostics),
-  };
 }
 
 type FragranceDetailRequestOptions = {

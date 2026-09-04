@@ -2225,6 +2225,7 @@ export const Wardrobe: React.FC<{
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
+                maxLength={160}
                 role="combobox"
                 aria-expanded={searchDropdownOpen}
                 aria-controls="wardrobe-search-suggestions"

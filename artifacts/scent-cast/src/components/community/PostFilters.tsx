@@ -255,6 +255,7 @@ export const PostFilters: React.FC<PostFiltersProps> = ({
           />
           <input
             type="search"
+            maxLength={160}
             value={draftQuery}
             onChange={(event) => setDraftQuery(event.target.value)}
             placeholder="Search rooms, fragrances, tags, or notes"

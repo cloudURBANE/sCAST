@@ -1337,6 +1337,7 @@ export const FragranceCapture: React.FC<{
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}
+              maxLength={160}
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setSearchFocused(true); setErrorStatus(null); setErrorPhase(null); }}
               onPointerDown={(e) => {

@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  candidateFromProfile,
   candidateFromSourceUrl,
+  cleanQueryParam,
   decodeIdentityId,
   encodeIdentityId,
   parseFragranceSourceUrl,
@@ -132,4 +134,33 @@ test("scent fact details complete only when both known source URLs have notes", 
 
   assert.equal((detail.source_coverage as { complete?: boolean }).complete, true);
   assert.equal((detail.source_coverage as { derived_metrics?: string }).derived_metrics, "complete");
+});
+
+test("candidateFromProfile safely handles null/undefined/sparse product objects", () => {
+  const c1 = candidateFromProfile("catalog", null as any);
+  assert.equal(c1.name, "");
+  assert.equal(c1.brand, undefined);
+  assert.equal(c1.house, undefined);
+  assert.equal(c1.id, "catalog:::");
+
+  const c2 = candidateFromProfile("dataset", { product: { name: "Aventus", brand: undefined as any } } as any);
+  assert.equal(c2.name, "Aventus");
+  assert.equal(c2.brand, undefined);
+  assert.equal(c2.house, undefined);
+  assert.equal(c2.id, "dataset:::Aventus");
+});
+
+test("cleanQueryParam: supports array query params and strips control characters", () => {
+  // Array parameters: takes first element
+  assert.equal(cleanQueryParam(["Dior Sauvage", "Creed Aventus"]), "Dior Sauvage");
+  assert.equal(cleanQueryParam([]), "");
+
+  // Control characters stripped
+  assert.equal(cleanQueryParam("Dior\x00Sauvage\x1fEDP"), "Dior Sauvage EDP");
+  assert.equal(cleanQueryParam("\x00\x01\x1f"), "");
+  assert.equal(cleanQueryParam("Sauvage\x7f"), "Sauvage");
+
+  // Length truncation at 180 chars
+  const long = "a".repeat(200);
+  assert.equal(cleanQueryParam(long).length, 180);
 });

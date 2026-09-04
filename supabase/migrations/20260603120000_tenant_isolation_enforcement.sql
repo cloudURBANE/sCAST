@@ -55,11 +55,11 @@ begin
       and rel.relname = 'users'
       and con.contype = 'u'
       and (
-        select array_agg(att.attname order by att.attnum)
+        select array_agg(att.attname::text order by att.attnum)
         from unnest(con.conkey) as k(attnum)
         join pg_attribute att
           on att.attrelid = con.conrelid and att.attnum = k.attnum
-      ) = array['email']
+      ) = array['email']::text[]
   loop
     execute format('alter table public.users drop constraint %I', c.conname);
   end loop;
@@ -83,11 +83,11 @@ begin
       and not x.indisprimary
       and not exists (select 1 from pg_constraint con where con.conindid = x.indexrelid)
       and (
-        select array_agg(att.attname order by att.attnum)
+        select array_agg(att.attname::text order by att.attnum)
         from unnest(x.indkey) as k(attnum)
         join pg_attribute att
           on att.attrelid = x.indrelid and att.attnum = k.attnum
-      ) = array['email']
+      ) = array['email']::text[]
   loop
     execute format('drop index public.%I', i.idxname);
   end loop;

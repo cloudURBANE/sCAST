@@ -24,7 +24,9 @@ import {
   scoreCatalogProfileForQuery,
 } from "./catalogProfileSearch.ts";
 
-export { canonicalizeBrand, brandSpellings };
+import { escapeSqlLike } from "./catalogSearchCore.ts";
+
+export { canonicalizeBrand, brandSpellings, escapeSqlLike };
 
 export function makeLookupKey(brand: string, name: string): string {
   return `${canonicalizeBrand(brand)}::${name.trim().toLowerCase()}`;
@@ -49,14 +51,18 @@ const MAX_CATALOG_CANDIDATES = 24;
 const MAX_PROFILE_CANDIDATES = 96;
 
 export async function getCatalogEntry(brand: string, name: string): Promise<ScentProfile | null> {
-  const key = makeLookupKey(brand, name);
-  const rows = await db
-    .select()
-    .from(globalFragrancesTable)
-    .where(eq(globalFragrancesTable.lookupKey, key))
-    .limit(1);
-  if (rows.length === 0) return null;
-  return sanitizeCatalogProfile(rows[0].profileData);
+  try {
+    const key = makeLookupKey(brand, name);
+    const rows = await db
+      .select()
+      .from(globalFragrancesTable)
+      .where(eq(globalFragrancesTable.lookupKey, key))
+      .limit(1);
+    if (rows.length === 0) return null;
+    return sanitizeCatalogProfile(rows[0].profileData);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -98,18 +104,24 @@ export async function searchCatalogCandidates(
   const terms = fragranceCatalogSearchTerms(q);
   const composite = sql`lower(${globalFragrancesTable.brand} || ' ' || ${globalFragrancesTable.name})`;
   const lookupKey = sql`lower(${globalFragrancesTable.lookupKey})`;
+  const escapedQ = escapeSqlLike(q);
   const conditions: SQL[] = [
-    sql`${composite} LIKE ${"%" + q + "%"}`,
-    sql`${lookupKey} LIKE ${"%" + q + "%"}`,
-    ...terms.map((term) => sql`${composite} LIKE ${"%" + term + "%"}`),
+    sql`${composite} LIKE ${"%" + escapedQ + "%"}`,
+    sql`${lookupKey} LIKE ${"%" + escapedQ + "%"}`,
+    ...terms.map((term) => sql`${composite} LIKE ${"%" + escapeSqlLike(term) + "%"}`),
   ];
 
-  const rows = await db
-    .select()
-    .from(globalFragrancesTable)
-    .where(or(...conditions))
-    .orderBy(sql`length(${globalFragrancesTable.name}) asc`)
-    .limit(MAX_CATALOG_CANDIDATES);
+  let rows: Array<typeof globalFragrancesTable.$inferSelect>;
+  try {
+    rows = await db
+      .select()
+      .from(globalFragrancesTable)
+      .where(or(...conditions))
+      .orderBy(sql`length(${globalFragrancesTable.name}) asc`)
+      .limit(MAX_CATALOG_CANDIDATES);
+  } catch {
+    return [];
+  }
 
   return rows
     .map((row) => {
@@ -133,7 +145,7 @@ function selectProfileCandidates(profileText: SQL, textMatchCount: SQL<number>, 
   return db
     .select()
     .from(globalFragrancesTable)
-    .where(or(...terms.map((term) => sql`${profileText} LIKE ${"%" + term + "%"}`)))
+    .where(or(...terms.map((term) => sql`${profileText} LIKE ${"%" + escapeSqlLike(term) + "%"}`)))
     .orderBy(sql`${textMatchCount} desc`, asc(globalFragrancesTable.lookupKey))
     .limit(MAX_PROFILE_CANDIDATES);
 }
@@ -168,7 +180,7 @@ export async function searchCatalogProfileCandidates(
   // still runs (as a slower seq scan), so retrieval degrades but never breaks.
   const profileText = sql`lower((${globalFragrancesTable.profileData} - 'scent_vector')::text)`;
   const textMatchCount = sql<number>`(${sql.join(
-    terms.map((term) => sql`case when ${profileText} LIKE ${"%" + term + "%"} then 1 else 0 end`),
+    terms.map((term) => sql`case when ${profileText} LIKE ${"%" + escapeSqlLike(term) + "%"} then 1 else 0 end`),
     sql` + `,
   )})`;
   let rows: Awaited<ReturnType<typeof selectProfileCandidates>>;
@@ -201,17 +213,23 @@ export async function searchCatalogBrandCandidates(
   const limit = Math.max(1, Math.min(options.limit ?? 12, 24));
   const terms = fragranceCatalogSearchTerms(q);
   const brand = sql`lower(${globalFragrancesTable.brand})`;
+  const escapedQ = escapeSqlLike(q);
   const conditions: SQL[] = [
-    sql`${brand} LIKE ${"%" + q + "%"}`,
-    ...terms.map((term) => sql`${brand} LIKE ${"%" + term + "%"}`),
+    sql`${brand} LIKE ${"%" + escapedQ + "%"}`,
+    ...terms.map((term) => sql`${brand} LIKE ${"%" + escapeSqlLike(term) + "%"}`),
   ];
 
-  const rows = await db
-    .select()
-    .from(globalFragrancesTable)
-    .where(or(...conditions))
-    .orderBy(sql`length(${globalFragrancesTable.name}) asc`)
-    .limit(MAX_CATALOG_CANDIDATES);
+  let rows: Array<typeof globalFragrancesTable.$inferSelect>;
+  try {
+    rows = await db
+      .select()
+      .from(globalFragrancesTable)
+      .where(or(...conditions))
+      .orderBy(sql`length(${globalFragrancesTable.name}) asc`)
+      .limit(MAX_CATALOG_CANDIDATES);
+  } catch {
+    return [];
+  }
 
   const seen = new Set<string>();
   return rows

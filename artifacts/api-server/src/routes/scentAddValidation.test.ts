@@ -105,3 +105,28 @@ test("validateSearchScentBody: valid query passes", () => {
     true,
   );
 });
+
+test("validateSearchScentBody: strips null bytes and rejects empty-after-strip", () => {
+  const body = { query: "Creed\0 Aventus\0" };
+  const res = validateSearchScentBody(body);
+  assert.equal(res.ok, true);
+  assert.equal(body.query, "Creed Aventus");
+
+  assert.equal(validateSearchScentBody({ query: "\0\0\0" }).ok, false);
+});
+
+test("validateSearchScentBody: rejects queries exceeding MAX_SEARCH_QUERY_LENGTH (180)", () => {
+  const longQuery = "a".repeat(181);
+  const result = validateSearchScentBody({ query: longQuery });
+  assert.equal(result.ok, false);
+  if (!result.ok) assert.match(result.error, /180/);
+
+  const exactQuery = "a".repeat(180);
+  assert.equal(validateSearchScentBody({ query: exactQuery }).ok, true);
+});
+
+test("validateScentProfileBody: enforces field length bounds", () => {
+  assert.equal(validateScentProfileBody({ name: "a".repeat(201) }).ok, false);
+  assert.equal(validateScentProfileBody({ name: "Aventus", brand: "b".repeat(121) }).ok, false);
+  assert.equal(validateScentProfileBody({ name: "Aventus", notes: ["c".repeat(101)] }).ok, false);
+});

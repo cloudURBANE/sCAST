@@ -27,3 +27,19 @@ test("buildWardrobeSearchSuggestions still matches items with placeholder famili
   assert.equal(suggestions.length, 1);
   assert.equal(suggestions[0].item.id, "1");
 });
+
+test("buildWardrobeSearchSuggestions safely handles huge pasted queries and token limits", () => {
+  const items = [
+    { id: "1", name: "Aventus", brand: "Creed", notes: ["pineapple", "birch"] },
+  ];
+  // Paste 50,000 characters
+  const hugeQuery = "aventus " + "token ".repeat(10_000);
+  const suggestions = buildWardrobeSearchSuggestions(items, hugeQuery);
+  // It shouldn't freeze or crash, and token matches should be cleanly bounded
+  assert.equal(suggestions.length, 0); // extra tokens beyond 8 cause mismatch or bounded score
+  const matchingHuge = "aventus " + "creed ".repeat(50);
+  const matched = buildWardrobeSearchSuggestions(items, matchingHuge);
+  assert.equal(matched.length, 1);
+  assert.equal(matched[0].item.id, "1");
+});
+

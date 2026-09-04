@@ -14,8 +14,8 @@ import type { Fragrance } from '@/components/Wardrobe';
 // Relative (not `@/`) so this module — and its test — run under the node test
 // runner, which has no path-alias resolution. (`@/` type-only imports are fine;
 // they're erased at runtime, but `proposalItemToFragrance` is a real value.)
-import { proposalItemToFragrance } from './scentMissionClient';
-import { normalizeApiBaseUrl } from './imageProxy';
+import { proposalItemToFragrance } from './scentMissionClient.ts';
+import { normalizeApiBaseUrl } from './imageProxy.ts';
 
 const rawApiBase =
   (typeof process !== 'undefined' && process.env?.VITE_API_BASE_URL) ||

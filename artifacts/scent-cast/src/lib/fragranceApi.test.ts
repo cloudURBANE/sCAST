@@ -3,8 +3,11 @@ import test from "node:test";
 import type { DerivedMetrics } from "./fragranceApi.ts";
 import {
   accordProminenceTier,
+  APP_SEARCH_TIMEOUT_MS,
   collectMainAccordDisplayRows,
   ENGINE_FALLBACK_SOURCE,
+  firstNonEmptyString,
+  getCachedFragranceSearch,
   getFragranceDetails,
   isBackgroundEnrichmentQueued,
   isFetchNetworkError,
@@ -18,6 +21,8 @@ import {
   resolveMainAccordChartRows,
   resolveSourceStatus,
   sanitizeEngineQuery,
+  sanitizeSearchQuery,
+  scoreSearchResultForQuery,
   searchFragrances,
 } from "./fragranceApi.ts";
 
@@ -1858,3 +1863,246 @@ test("getFragranceDetails surfaces the original engine error when the local fall
       !err.message.includes("502"),
   );
 });
+
+test("APP_SEARCH_TIMEOUT_MS is configured to 10 seconds", () => {
+  assert.equal(APP_SEARCH_TIMEOUT_MS, 10_000);
+});
+
+test("sanitizeSearchQuery handles surrogate safety, control characters, and length truncation", () => {
+  // Lone surrogates are replaced with replacement character, never throwing URIError on encodeURIComponent
+  const loneHigh = "Sauvage \uD800";
+  const loneLow = "Sauvage \uDC00";
+  assert.doesNotThrow(() => encodeURIComponent(sanitizeSearchQuery(loneHigh)));
+  assert.doesNotThrow(() => encodeURIComponent(sanitizeSearchQuery(loneLow)));
+  assert.equal(sanitizeSearchQuery(loneHigh), "Sauvage \uFFFD");
+  assert.equal(sanitizeSearchQuery(loneLow), "Sauvage \uFFFD");
+
+  // Valid surrogate pairs (emojis) are preserved
+  assert.equal(sanitizeSearchQuery("Bleu de Chanel 🌊"), "Bleu de Chanel 🌊");
+  assert.equal(sanitizeSearchQuery("🌸 Flowerbomb 🌸"), "🌸 Flowerbomb 🌸");
+
+  // Control characters (\x00-\x1f and \x7f) are stripped
+  assert.equal(
+    sanitizeSearchQuery("Sau\x00vage\x07 \x1bElixir\x7f"),
+    "Sauvage Elixir",
+  );
+
+  // Whitespace is normalized and trimmed
+  assert.equal(
+    sanitizeSearchQuery("  Tom \t\n Ford   Oud   Wood  "),
+    "Tom Ford Oud Wood",
+  );
+
+  // Default length truncation to 160 characters
+  const longQuery = "a".repeat(200);
+  const sanitizedLong = sanitizeSearchQuery(longQuery);
+  assert.equal(sanitizedLong.length, 160);
+  assert.equal(sanitizedLong, "a".repeat(160));
+
+  // Custom maxLength argument
+  assert.equal(sanitizeSearchQuery("1234567890", 5), "12345");
+
+  // Surrogate split at boundary remains well-formed
+  const edgeCaseSurrogate = "a".repeat(159) + "🌸";
+  const truncatedSurrogate = sanitizeSearchQuery(edgeCaseSurrogate);
+  assert.doesNotThrow(() => encodeURIComponent(truncatedSurrogate));
+
+  // Non-string inputs safely return empty string
+  assert.equal(sanitizeSearchQuery(null as unknown as string), "");
+  assert.equal(sanitizeSearchQuery(undefined as unknown as string), "");
+});
+
+test("searchFragrances bypasses network on empty or whitespace-only queries", async () => {
+  let fetchCalled = false;
+  const previousFetch = globalThis.fetch;
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async () => {
+      fetchCalled = true;
+      throw new Error("fetch should not be called for empty query");
+    },
+  });
+
+  try {
+    const resEmpty = await searchFragrances("");
+    assert.deepEqual(resEmpty, { query: "", results: [] });
+
+    const resWhitespace = await searchFragrances("   \t\n  ");
+    assert.deepEqual(resWhitespace, { query: "   \t\n  ", results: [] });
+
+    const resControlOnly = await searchFragrances("\x00\x07\x1f");
+    assert.deepEqual(resControlOnly, { query: "\x00\x07\x1f", results: [] });
+
+    assert.equal(fetchCalled, false);
+  } finally {
+    Object.defineProperty(globalThis, "fetch", {
+      configurable: true,
+      value: previousFetch,
+    });
+  }
+});
+
+test("searchFragrances recovers and runs sanitized retry when supplemental app search fails on 0-result engine search", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;
+  const previousAppApiUrl = process.env.VITE_API_BASE_URL;
+
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine.example.test";
+  process.env.VITE_API_BASE_URL = "https://app-api.example.test";
+
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: async (url: string) => {
+      // 1. First engine call with accented query returns 0 results
+      if (url.includes("/api/fragrances/search?q=") && url.includes(encodeURIComponent("LANCÔME Idôle"))) {
+        return new Response(
+          JSON.stringify({
+            query: "LANCÔME Idôle",
+            results: [],
+            diagnostics: { result_count: 0 },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      // 2. Supplemental app search fails with 500
+      if (url.startsWith("https://app-api.example.test/api/fragrances/search")) {
+        return new Response(
+          JSON.stringify({ error: "App search failed" }),
+          { status: 500, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      // 3. Sanitized retry engine call succeeds with results
+      if (url.includes("/api/fragrances/search?q=") && url.includes(encodeURIComponent("LANCOME Idole"))) {
+        return new Response(
+          JSON.stringify({
+            query: "LANCOME Idole",
+            results: [
+              {
+                id: "srt-idole",
+                name: "Idole",
+                house: "Lancome",
+              },
+            ],
+            diagnostics: { result_count: 1 },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response("Not found", { status: 404 });
+    },
+  });
+
+  t.after(() => {
+    Object.defineProperty(globalThis, "fetch", { configurable: true, value: previousFetch });
+    if (previousApiUrl === undefined) delete process.env.VITE_FRAGRANCE_API_URL;
+    else process.env.VITE_FRAGRANCE_API_URL = previousApiUrl;
+    if (previousAppApiUrl === undefined) delete process.env.VITE_API_BASE_URL;
+    else process.env.VITE_API_BASE_URL = previousAppApiUrl;
+  });
+
+  // Verify searchFragrances does not throw from supplemental app 500, but recovers and retries sanitized query
+  const response = await searchFragrances("LANCÔME Idôle");
+  assert.equal(response.results.length, 1);
+  assert.equal(response.results[0]?.name, "Idole");
+  assert.equal(response.query, "LANCÔME Idôle");
+});
+
+test("normalizeFragranceSearchResult supports 4-digit string years and guards against NaN", () => {
+  const withStringYear = normalizeFragranceSearchResult(
+    { id: "1", name: "Sauvage", house: "Dior", year: "2024" },
+    "Sauvage",
+  );
+  assert.equal(withStringYear?.year, 2024);
+
+  const withSpacedStringYear = normalizeFragranceSearchResult(
+    { id: "2", name: "Aventus", house: "Creed", year: " 2010 " },
+    "Aventus",
+  );
+  assert.equal(withSpacedStringYear?.year, 2010);
+
+  const withInvalidYear = normalizeFragranceSearchResult(
+    { id: "3", name: "Eros", house: "Versace", year: "circa 2012" },
+    "Eros",
+  );
+  assert.equal(withInvalidYear?.year, null);
+
+  const withNanYear = normalizeFragranceSearchResult(
+    { id: "4", name: "Kouros", house: "YSL", year: NaN },
+    "Kouros",
+  );
+  assert.equal(withNanYear?.year, null);
+
+  const withNanMetrics = normalizeFragranceSearchResult(
+    { id: "5", name: "La Nuit", house: "YSL", bn_positive_pct: NaN, bn_vote_count: NaN },
+    "La Nuit",
+  );
+  assert.equal(withNanMetrics?.bn_positive_pct, undefined);
+  assert.equal(withNanMetrics?.bn_vote_count, undefined);
+});
+
+test("firstNonEmptyString and scoreSearchResultForQuery guard against NaN", () => {
+  assert.equal(firstNonEmptyString(NaN, undefined, "Dior"), "Dior");
+  assert.equal(firstNonEmptyString(NaN, null), undefined);
+  assert.equal(firstNonEmptyString(NaN), undefined);
+
+  const score = scoreSearchResultForQuery("Dior Sauvage", {
+    id: "1",
+    name: "Sauvage",
+    house: "Dior",
+  });
+  assert.equal(typeof score, "number");
+  assert.equal(Number.isFinite(score), true);
+  assert.ok(score > 0);
+
+  const scoreEmpty = scoreSearchResultForQuery("xyz", {
+    id: "2",
+    name: "",
+  });
+  assert.equal(scoreEmpty, 0);
+  assert.equal(Number.isFinite(scoreEmpty), true);
+});
+
+test("getCachedFragranceSearch rejects entries with invalid or NaN cachedAt timestamps", () => {
+  const previousWindow = (globalThis as typeof globalThis & { window?: unknown }).window;
+  const localStorageData = new Map<string, string>();
+  const localStorage = {
+    getItem: (key: string) => localStorageData.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      localStorageData.set(key, value);
+    },
+    removeItem: (key: string) => {
+      localStorageData.delete(key);
+    },
+    clear: () => {
+      localStorageData.clear();
+    },
+  };
+
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { localStorage } });
+
+  try {
+    const query = "test fragrance";
+    const cacheKey = "test fragrance";
+    const corruptEntry = {
+      cachedAt: NaN,
+      response: {
+        query,
+        results: [{ id: "1", name: "Test", house: "House" }],
+      },
+    };
+    localStorageData.set(
+      "scentcast.fragranceSearchCache.v4",
+      JSON.stringify({ [cacheKey]: corruptEntry }),
+    );
+
+    const hit = getCachedFragranceSearch(query);
+    assert.equal(hit, null);
+  } finally {
+    if (previousWindow === undefined) {
+      delete (globalThis as typeof globalThis & { window?: unknown }).window;
+    } else {
+      Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+    }
+  }
+});
+
