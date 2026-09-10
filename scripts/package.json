@@ -20,7 +20,7 @@
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.4",
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "catalog:",
     "tsx": "catalog:"
   }
