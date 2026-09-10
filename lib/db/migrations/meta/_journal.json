@@ -43,6 +43,13 @@
       "when": 1785331416165,
       "tag": "0005_repair_image_cache_provider_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788955255531,
+      "tag": "0006_perfect_juggernaut",
+      "breakpoints": true
     }
   ]
 }

@@ -3,8 +3,17 @@ import { HealthCheckResponse } from "@workspace/api-zod";
 import { pool } from "@workspace/db";
 import { getRedis, isRedisConfigured } from "../lib/redisClient.ts";
 import { logger } from "../lib/logger.ts";
+import { isSentryEnabled } from "../lib/sentry.ts";
 
 const router: IRouter = Router();
+
+// Operational baseline: reports configuration, never secrets or customer data.
+router.get("/version", (_req, res) => {
+  res.json({ commit: process.env.RAILWAY_GIT_COMMIT_SHA?.trim() || null,
+    errorReportingConfigured: isSentryEnabled(),
+    launchLimitsEnabled: process.env.LAUNCH_LIMITS_ENABLED === "true",
+    spendingPaused: process.env.LAUNCH_SPENDING_STOP === "true" });
+});
 
 // Liveness: proves the event loop is alive and the process is serving. Touches
 // no external dependency on purpose, so a transient DB/Redis blip never trips a

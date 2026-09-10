@@ -20,6 +20,7 @@ import { deriveAppState } from "../services/appStateCore";
 import { isAdminUser } from "../lib/adminAccess";
 import { logger } from "../lib/logger";
 import { SCENT_FAMILIES } from "@workspace/scent-weather-engine";
+import { stripeClient } from "../services/billingStripe.ts";
 
 const router = Router();
 
@@ -649,6 +650,22 @@ router.delete("/me", requireAuth, meWriteRateLimit, async (req: AuthRequest, res
     // CASCADE / SET NULL FKs clean up anything not explicitly handled, e.g. beam
     // logs and the usage ledger).
     await db.transaction(async (tx) => {
+      // Also exclude first-time checkout creation (its FK takes a user-row
+      // key-share lock), including when no billing account exists yet.
+      await tx.execute(sql`SELECT id FROM users WHERE id=${user.id} FOR UPDATE`);
+      // Keep checkout excluded while deleting. Stop future charges before the
+      // customer mapping can cascade away; a Stripe failure leaves the account.
+      const billing = await tx.execute(sql`SELECT customer_id FROM billing_accounts WHERE user_id=${user.id} AND tenant_id=${getTenantId(req)} FOR UPDATE`);
+      const customer = billing.rows[0]?.customer_id;
+      if (typeof customer === "string") {
+        const stripe = stripeClient();
+        for await (const session of stripe.checkout.sessions.list({ customer, status: "open", limit: 100 })) {
+          await stripe.checkout.sessions.expire(session.id);
+        }
+        for await (const subscription of stripe.subscriptions.list({ customer, status: "all", limit: 100 })) {
+          if (!["canceled", "incomplete_expired"].includes(subscription.status)) await stripe.subscriptions.cancel(subscription.id);
+        }
+      }
       await tx.delete(communityReactionsTable).where(eq(communityReactionsTable.userId, user.id));
       await tx.delete(communityVotesTable).where(eq(communityVotesTable.userId, user.id));
       await tx.delete(communityCommentsTable).where(eq(communityCommentsTable.userId, user.id));

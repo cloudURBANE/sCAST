@@ -1,5 +1,27 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+
+test("a server budget stop never falls back to the direct engine", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApi = process.env.VITE_API_BASE_URL;
+  const previousEngine = process.env.VITE_FRAGRANCE_API_URL;
+  delete process.env.VITE_API_BASE_URL;
+  process.env.VITE_FRAGRANCE_API_URL = "https://engine-budget.example.test";
+  const calls: string[] = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return new Response(JSON.stringify({ error: "Budget paused" }), { status: 503, headers: { "X-ScentBeam-Usage-Control": "enforced", "Content-Type": "application/json" } });
+  };
+  t.after(() => {
+    globalThis.fetch = previousFetch;
+    if (previousApi === undefined) delete process.env.VITE_API_BASE_URL; else process.env.VITE_API_BASE_URL = previousApi;
+    if (previousEngine === undefined) delete process.env.VITE_FRAGRANCE_API_URL; else process.env.VITE_FRAGRANCE_API_URL = previousEngine;
+  });
+  await searchFragrances("budget stop unique scent").catch(() => {});
+  assert.ok(calls.some(url => url.startsWith("/api/engine/")));
+  assert.equal(calls.some(url => url.startsWith("https://engine-budget.example.test")), false);
+  assert.equal(calls.filter(url => url.startsWith("/api/engine/")).length, 1);
+});
 import type { DerivedMetrics } from "./fragranceApi.ts";
 import {
   accordProminenceTier,
@@ -2105,4 +2127,3 @@ test("getCachedFragranceSearch rejects entries with invalid or NaN cachedAt time
     }
   }
 });
-

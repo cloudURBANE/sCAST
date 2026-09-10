@@ -26,3 +26,4 @@ export * from "./arenaBeamGrants";
 export * from "./inAppNotifications";
 export * from "./conversations";
 export * from "./messages";
+export * from "./billing";

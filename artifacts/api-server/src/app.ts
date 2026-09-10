@@ -13,6 +13,8 @@ import { logger } from "./lib/logger";
 import { parseAllowedOrigins } from "./lib/corsOrigins.ts";
 import { captureException } from "./lib/sentry.ts";
 import { frontendStaticDir } from "./paths";
+import billingRouter, { stripeWebhook } from "./routes/billing";
+import { launchGate } from "./middlewares/launchGate";
 
 const app: Express = express();
 const frontendIndexPath = path.join(frontendStaticDir, "index.html");
@@ -111,7 +113,7 @@ if (allowedOrigins === false) {
     "CORS_ALLOWED_ORIGINS, FRONTEND_ORIGINS, and CORS_ORIGIN unset — no cross-origin browser access (same-origin SPA unaffected)",
   );
 }
-app.use(cors({ origin: allowedOrigins, credentials: false }));
+app.use(cors({ origin: allowedOrigins, credentials: false, exposedHeaders: ["X-ScentBeam-Usage-Control"] }));
 
 // Body limits. A single 10mb limit on every route is a cheap memory-amplification
 // vector: an unauthenticated caller can force the server to buffer 10mb per request
@@ -125,6 +127,8 @@ const DATA_URL_BODY_LIMIT = "5mb";
 const DATA_URL_JSON_PATHS = new Set(["/api/refresh-image", "/api/reimagine-bottle-image"]);
 
 const jsonDefault = express.json({ limit: DEFAULT_BODY_LIMIT });
+// Stripe verifies the exact signed bytes, before any JSON body transformation.
+app.post("/api/billing/webhook", express.raw({ type: "application/json", limit: DEFAULT_BODY_LIMIT }), stripeWebhook);
 const jsonLarge = express.json({ limit: DATA_URL_BODY_LIMIT });
 app.use((req, res, next) => {
   (DATA_URL_JSON_PATHS.has(req.path) ? jsonLarge : jsonDefault)(req, res, next);
@@ -139,6 +143,8 @@ app.use(resolveTenant);
 // mount below). The Vercel edge middleware used to apply this; CloudFront
 // forwards origin headers untouched, so it must live here now.
 app.use("/api", apiCacheSafety);
+app.use("/api", billingRouter);
+app.use("/api", launchGate);
 
 app.use("/api", router);
 app.use(cjRedirectRouter);

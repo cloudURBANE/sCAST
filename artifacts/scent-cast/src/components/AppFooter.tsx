@@ -10,6 +10,7 @@ import { openConsentManager } from "@/lib/consent";
 // (faint centered logo + copyright) rather than introducing a new visual style.
 
 const legalLinks = [
+  { to: "/billing", label: "Billing" },
   { to: "/privacy", label: "Privacy" },
   { to: "/terms", label: "Terms" },
   { to: "/cookies", label: "Cookie Policy" },

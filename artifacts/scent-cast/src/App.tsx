@@ -96,6 +96,7 @@ const SharePage = React.lazy(() =>
 const PrivacyPage = React.lazy(() =>
   loadRouteChunk(() => import('@/pages/legal').then((module) => ({ default: module.PrivacyPage }))),
 );
+const BillingPage = React.lazy(() => loadRouteChunk(() => import('@/pages/billing')));
 const TermsPage = React.lazy(() =>
   loadRouteChunk(() => import('@/pages/legal').then((module) => ({ default: module.TermsPage }))),
 );
@@ -1873,6 +1874,7 @@ const AppContent = React.memo(function AppContent({ location }: { location: Loca
           />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
+          <Route path="/billing" element={<BillingPage />} />
           <Route path="/cookies" element={<CookiePolicyPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

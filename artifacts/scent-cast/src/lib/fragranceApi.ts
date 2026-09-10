@@ -1139,6 +1139,8 @@ async function fetchFragranceEngine(
     const { init: timedInit, cleanup } = withEngineTimeout(init, ENGINE_FETCH_TIMEOUT_MS);
     try {
       const res = await fetch(primaryUrl, timedInit);
+      // Never retry or bypass server accounting through the direct engine.
+      if (res.headers.get("X-ScentBeam-Usage-Control") === "enforced") return res;
       if (res.ok || res.status < 500) return res;
       lastError = new Error(`Fragrance engine request failed: ${res.status}`);
     } catch (err) {
@@ -2088,3 +2090,4 @@ export async function summarizeReviews(
     return [];
   }
 }
+import { launchFetch as fetch } from "./launchFetch.ts";
