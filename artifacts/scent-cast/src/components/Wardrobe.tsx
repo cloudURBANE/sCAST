@@ -2383,13 +2383,8 @@ export const Wardrobe: React.FC<{
           </section>
         )}
 
-        <div
-          className={`space-y-8 ${
-            showEmptyVaultState
-              ? 'pb-[calc(var(--bottomnav-h)+1rem)] sm:pb-10'
-              : 'pb-[calc(var(--bottomnav-h)+2rem)] sm:pb-36'
-          }`}
-        >
+        {/* The page shell reserves bottom-nav clearance after the footer. */}
+        <div className="space-y-8 pb-8 sm:pb-10">
           {showDiscoveryBanner ? (
             <VaultDiscoveryProgress
               count={vaultCount}
@@ -2499,40 +2494,53 @@ export const Wardrobe: React.FC<{
               <p className="mt-2 text-sm leading-relaxed text-scent-text-muted">Try a shorter name, or search by brand alone.</p>
             </div>
           ) : (
-            <div className="mx-auto w-full max-w-[30rem] sm:max-w-[34rem]">
-              {/* Zero-bottle onboarding: one compact centered card with a single
-                  reading path — emblem/label → headline → one line of copy →
-                  primary CTA → live discovery progress. No side panel, no
-                  nested mini-cards, no oversized hero. */}
-              <div className="scent-onboarding-card relative overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 px-6 py-9 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.1),0_28px_64px_-44px_rgba(0,0,0,0.9)] sm:px-10 sm:py-11">
-                <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-scent-accent/45 to-transparent" aria-hidden />
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-scent-accent/24 bg-scent-surface/50 shadow-[inset_0_1px_0_rgba(255,236,183,0.09)]" aria-hidden>
-                  <VaultEmptyEmblem />
+            <section aria-labelledby="vault-welcome-title" className="scent-onboarding-card mx-auto grid w-full max-w-6xl overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 lg:grid-cols-2">
+              <div className="flex flex-col items-start px-6 py-8 sm:p-10 lg:p-12">
+                <div className="mb-6 flex items-center gap-3">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full border border-scent-accent/25 bg-scent-accent/[0.04]" aria-hidden>
+                    <VaultEmptyEmblem />
+                  </span>
+                  <p className="scent-type-label text-scent-accent">Your collection, considered</p>
                 </div>
-                <p className="scent-type-label text-scent-accent/85">Collection Vault</p>
-                <h3 className="mx-auto mt-2.5 max-w-[22rem] font-serif italic text-[1.9rem] leading-tight text-foreground sm:max-w-[26rem] sm:text-4xl">
-                  Start with the bottles you actually wear
+                <h3 id="vault-welcome-title" className="max-w-md font-serif italic text-4xl leading-[1.12] text-foreground sm:text-5xl">
+                  Every great rotation starts with one bottle.
                 </h3>
-                <p className="mx-auto mt-3 max-w-[26rem] text-[15px] leading-relaxed text-scent-text-muted">
-                  Add three you wear the most. ScentBeam uses them to understand your taste, compare overlap, and recommend what fits the day.
+                <p className="mt-5 max-w-md text-[15px] leading-7 text-scent-text-muted sm:text-base">
+                  Bring the fragrances you love into one place. Start with a favorite, then add two more to unlock daily recommendations shaped by your collection and the weather.
                 </p>
                 {onExpandArchive && (
                   <button
                     type="button"
                     onClick={() => onExpandArchive({ target: 'vault' })}
-                    className="scent-primary-button mt-7 inline-flex min-h-[56px] w-full max-w-[22rem] items-center justify-center gap-2.5 rounded-scent px-8 py-3.5 transition-transform hover:scale-[1.01] active:scale-[0.99] focus-visible:outline-none"
+                    className="scent-primary-button mt-8 inline-flex min-h-[56px] w-full items-center justify-center gap-3 rounded-scent px-6 py-3.5 sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background"
                   >
                     <Search size={18} strokeWidth={1.75} aria-hidden />
                     <span className="font-serif italic text-xl">Add your first fragrance</span>
+                    <ArrowRight size={18} strokeWidth={1.75} aria-hidden />
                   </button>
                 )}
-                <VaultDiscoveryProgress
-                  count={vaultCount}
-                  variant="full"
-                  className="mx-auto mt-8 max-w-[22rem] border-t border-scent-text-subtle/20 pt-6"
-                />
+                <p className="mt-3 text-sm text-scent-text-subtle">Search by fragrance name or brand.</p>
               </div>
-            </div>
+              <div className="border-t border-scent-accent/15 bg-scent-accent/[0.025] px-6 py-8 sm:p-10 lg:border-l lg:border-t-0 lg:p-12">
+                <p className="scent-type-label text-scent-accent">More from every bottle</p>
+                <dl className="mt-6 space-y-6">
+                  {[
+                    { number: '01', title: 'Know what you own', description: 'Keep your favorites together and explore the notes, scent families, and character of each fragrance.' },
+                    { number: '02', title: 'Find what fits today', description: 'Let your collection meet the forecast, with daily picks that take the weather into account.' },
+                    { number: '03', title: 'Discover with direction', description: 'Ask Beam to compare your fragrances and help you explore what could come next.' },
+                  ].map(({ number, title, description }) => (
+                    <div key={number} className="flex gap-4">
+                      <span className="pt-1 font-mono text-xs text-scent-accent/75" aria-hidden>{number}</span>
+                      <div>
+                        <dt className="text-lg font-medium text-foreground">{title}</dt>
+                        <dd className="mt-1.5 text-sm leading-6 text-scent-text-muted">{description}</dd>
+                      </div>
+                    </div>
+                  ))}
+                </dl>
+                <VaultDiscoveryProgress count={vaultCount} variant="banner" className="mt-8" />
+              </div>
+            </section>
           )}
         </div>
       </div>

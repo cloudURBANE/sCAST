@@ -7,7 +7,7 @@ import { effectiveWithMeItems } from './lib/withMe';
 import { buildHeroTickerPhrases } from './lib/heroTickerPhrases';
 import { stableProposalItemId, type CurateCollectionResult } from './lib/collectionCuration';
 import { getPendingCuration, curationItemToFragrance, pickResumeCurationTarget } from './lib/curationClient';
-import { X } from 'lucide-react';
+import { ArrowDown, X } from 'lucide-react';
 import { AnimatePresence, animate, m, useMotionValue, useReducedMotion } from 'framer-motion';
 import { ThreadBackground, type ThreadBackgroundMode } from './components/threads/ThreadBackground';
 import { AppTopNav } from './components/AppTopNav';
@@ -1135,7 +1135,7 @@ function DashboardView() {
           in landscape on a notched phone the content column stays clear of the
           notch/rounded corners like the fixed bars already do. Portrait is
           unchanged (insets are 0, so max() resolves to the original 1rem/2rem). */}
-      <main className="relative z-10 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))] sm:pb-24 max-w-[1760px] mx-auto">
+      <main className="relative z-10 pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))] sm:pl-[max(2rem,env(safe-area-inset-left))] sm:pr-[max(2rem,env(safe-area-inset-right))] max-w-[1760px] mx-auto">
         {/* Home — first viewport. On phones this column fills the space below the
             top bar (min-h = 100svh − topbar) and reserves the floating tab bar as
             real bottom PADDING (bottomnav-h + breathing room). Padding — not a
@@ -1414,11 +1414,21 @@ function DashboardView() {
           </div>
         </div>
 
-        {/* Page two: the Vault of Aromas, reached by scrolling one screen down
-            from the home view above. */}
-        {/* The home column above already fills the first viewport (min-h 100svh),
-            so this margin is pure separation — a moderate band, not a dead zone. */}
-        <div id="scent-vault-section" className="scent-deferred-section !mt-16 sm:!mt-28 lg:!mt-36" style={{ scrollMarginTop: 'var(--topbar-h)' }}>
+        {!agentActive && !vaultSearchUiActive ? (
+          <div className="mx-auto mt-4 flex max-w-[52rem] justify-center sm:mt-8">
+            <button
+              type="button"
+              onClick={() => handleViewVault()}
+              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-scent-accent/15 bg-white/[0.02] px-5 text-sm text-scent-text-muted transition-colors hover:border-scent-accent/40 hover:text-scent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+            >
+              Explore your vault
+              <ArrowDown size={16} strokeWidth={1.75} aria-hidden />
+            </button>
+          </div>
+        ) : null}
+
+        {/* A single section gap separates the forecast and collection. */}
+        <div id="scent-vault-section" className="scent-deferred-section !mt-12 sm:!mt-16 lg:!mt-20" style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1.5rem)' }}>
             <React.Suspense fallback={<WardrobeFallback />}>
               <Wardrobe
                 items={items}
@@ -1575,7 +1585,7 @@ function DashboardView() {
           </div>
       ) : null}
 
-      <AppFooter className="mt-12 sm:mt-16" />
+      <AppFooter showExploreLinks className="mt-8 sm:mt-12" />
     </div>
   );
 }
