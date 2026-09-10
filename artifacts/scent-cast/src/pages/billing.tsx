@@ -19,7 +19,7 @@ export default function BillingPage() {
   const { authToken, setIsAuthModalOpen } = useAuth();
   const [billing, setBilling] = useState<Billing | null>(null);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"checkout" | "portal" | null>(null);
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
@@ -43,7 +43,8 @@ export default function BillingPage() {
     return () => controller.abort();
   }, [authToken, refresh]);
   async function openBilling(action: "checkout" | "portal") {
-    setBusy(true);
+    if (busy || !authToken) return;
+    setBusy(action);
     setError("");
     try {
       const r = await fetch(`${apiBase}/api/billing/${action}`, {
@@ -65,7 +66,7 @@ export default function BillingPage() {
         e instanceof Error ? e.message : "Billing is temporarily unavailable.",
       );
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
   const button =
@@ -147,34 +148,25 @@ export default function BillingPage() {
                       before subscribing.
                     </p>
                     <button
-                      disabled={busy}
+                      disabled={busy !== null}
+                      aria-busy={busy === "checkout"}
                       className={button}
                       onClick={() => void openBilling("checkout")}
                     >
-                      Subscribe for $9/month
+                      {busy === "checkout" ? "Opening secure checkout…" : "Subscribe for $9/month"}
                     </button>
                   </>
                 )}
                 {billing.canManage && (
                   <button
-                    disabled={busy}
+                    disabled={busy !== null}
+                    aria-busy={busy === "portal"}
                     className={button}
                     onClick={() => void openBilling("portal")}
                   >
-                    Manage billing or cancel
+                    {busy === "portal" ? "Opening billing…" : "Manage billing or cancel"}
                   </button>
                 )}
-                {billing.checkoutEnabled &&
-                  billing.canManage &&
-                  !billing.paid && (
-                    <button
-                      disabled={busy}
-                      className={button}
-                      onClick={() => void openBilling("checkout")}
-                    >
-                      Start a subscription
-                    </button>
-                  )}
                 {!billing.checkoutEnabled && !billing.paid && (
                   <p>Paid enrollment is not open yet.</p>
                 )}

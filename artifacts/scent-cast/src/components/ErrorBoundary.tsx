@@ -96,17 +96,17 @@ export class ErrorBoundary extends Component<Props, State> {
               
               <div className="space-y-3">
                 <p className="text-[10px] uppercase tracking-[0.4em] text-red-400/80 font-bold">
-                  System Disruption
+                  Something went wrong
                 </p>
                 <h1 className="font-serif italic text-3xl sm:text-4xl text-foreground tracking-tight leading-tight">
-                  Olfactory Feed Interrupted
+                  Let's get you back.
                 </h1>
                 <p className="text-sm text-white/55 max-w-sm mx-auto leading-relaxed">
-                  An unexpected exception halted the interface. Let's restore the environmental parameters.
+                  ScentBeam couldn't finish loading this view. Check your connection, then reload to try again.
                 </p>
               </div>
 
-              {this.state.error && (
+              {import.meta.env.DEV && this.state.error && (
                 <div className="w-full p-4 rounded-xl bg-white/[0.03] border border-white/5 text-left text-xs text-white/50 font-mono overflow-auto max-h-32 scrollbar-thin">
                   <span className="text-red-400 font-bold">Error:</span> {this.state.error.message}
                 </div>
@@ -118,7 +118,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 className="scent-primary-button w-full h-14 flex items-center justify-center gap-3 transition-opacity rounded-[var(--radius-scent)] hover:opacity-90 font-serif italic text-lg text-black bg-scent-accent"
               >
                 <RotateCcw size={18} className="shrink-0" />
-                <span>Calibrate Matrix & Reload</span>
+                <span>Reload ScentBeam</span>
               </button>
             </div>
           </div>
@@ -163,10 +163,10 @@ export function RouteErrorFallback({
       </h2>
       <p className="mt-2 text-sm text-scent-text-muted leading-relaxed">
         {staleChunk
-          ? 'A new version of ScentBeam is available — reload to pick it up.'
-          : 'Something went wrong rendering this view. The rest of the app is still here.'}
+          ? 'This page could not finish downloading. Check your connection, then reload to get the latest version.'
+          : 'This view hit a problem. Try again, or use the navigation to explore another page.'}
       </p>
-      {!staleChunk && (
+      {import.meta.env.DEV && !staleChunk && (
         <p className="mt-3 text-xs text-scent-text-subtle/80 font-mono break-words">{error.message}</p>
       )}
       <button

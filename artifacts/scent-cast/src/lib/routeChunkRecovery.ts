@@ -72,6 +72,8 @@ export function reloadForStaleRouteChunk(error: unknown): boolean {
  */
 export function reloadOnceForStaleChunk(): boolean {
   if (typeof window === 'undefined') return false;
+  // Reloading cannot repair an offline download and would discard the current UI.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
 
   try {
     const attemptedFor = window.sessionStorage.getItem(ROUTE_CHUNK_RELOAD_KEY);
@@ -79,8 +81,9 @@ export function reloadOnceForStaleChunk(): boolean {
     if (attemptedFor === route) return false;
     window.sessionStorage.setItem(ROUTE_CHUNK_RELOAD_KEY, route);
   } catch {
-    // Storage can be unavailable in private mode. A single browser reload is
-    // still better than stranding the user on the global crash panel.
+    // Without persistent storage we cannot guard across page loads. Let the
+    // error boundary offer a manual retry instead of risking a reload loop.
+    return false;
   }
 
   reloadThroughFreshServiceWorker();
@@ -92,13 +95,9 @@ export async function loadRouteChunk<T extends ComponentType<unknown>>(
 ): Promise<{ default: T }> {
   try {
     const mod = await loader();
-    if (typeof window !== 'undefined') {
-      try {
-        window.sessionStorage.removeItem(ROUTE_CHUNK_RELOAD_KEY);
-      } catch {
-        /* ignore unavailable storage */
-      }
-    }
+    // A successful sibling chunk does not prove the failing chunk recovered.
+    // Keep the route's guard for this session so mixed cached/deleted chunks
+    // cannot repeatedly reload the same page after a deployment.
     return mod;
   } catch (error) {
     if (isRouteChunkLoadError(error)) {
