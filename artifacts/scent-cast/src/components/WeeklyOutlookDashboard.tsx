@@ -22,6 +22,7 @@ interface WeeklyOutlookDashboardProps {
   items: Fragrance[];
   weather: WeatherData | null;
   onSelectFragrance?: (item: Fragrance) => void;
+  onExploreVault?: () => void;
 }
 
 interface OutlookDay {
@@ -682,6 +683,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
   items,
   weather,
   onSelectFragrance,
+  onExploreVault,
 }) => {
   const prefersReducedMotion = useReducedMotion() === true;
   const forecast = useMemo(
@@ -827,7 +829,22 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
         Scent Forecast
       </h2>
 
-      {!activePlan ? (
+      {items.length === 0 ? (
+        <div className="mx-auto mt-[var(--fc-title-hero)] flex w-full max-w-[46rem] flex-col items-center gap-4 rounded-[28px] border border-scent-accent/20 bg-gradient-to-b from-white/[0.055] to-black/20 px-6 py-7 sm:flex-row sm:gap-6 sm:px-8 sm:py-8 sm:text-left">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/5 text-scent-accent" aria-hidden>
+            <Sparkles size={23} strokeWidth={1.5} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-serif text-xl italic leading-snug text-foreground sm:text-2xl">A forecast made for your collection.</p>
+            <p className="mt-2 text-sm leading-6 text-scent-text-muted">Add your fragrances to discover what to wear with the weather.</p>
+          </div>
+          {onExploreVault && (
+            <button type="button" onClick={() => onExploreVault()} className="scent-primary-button inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-scent px-5 py-3 text-sm sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+              Build your vault
+            </button>
+          )}
+        </div>
+      ) : !activePlan ? (
         <div className="flex h-[14rem] items-center justify-center px-8 sm:h-[17rem]">
           <p className="max-w-sm font-serif text-lg italic leading-relaxed text-scent-text-muted">
             Live forecast unavailable right now. Your daily scent picks will return with the weather feed.

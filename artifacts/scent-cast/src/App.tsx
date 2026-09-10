@@ -616,9 +616,9 @@ const AtmosphereBar: React.FC<AtmosphereBarProps> = React.memo(({
               aria-hidden={copyIndex > 0}
             >
               {metrics.map((metric) => (
-                <div key={metric.label} className="scent-weather-cell">
+                <div key={metric.label} className="scent-weather-cell" style={{ justifyContent: 'flex-start' }}>
                   <span className="scent-weather-label">{metric.label}</span>
-                  <span className="scent-weather-value">{metric.value}</span>
+                  <span className="scent-weather-value" style={{ display: 'block', overflow: 'visible', whiteSpace: 'normal', overflowWrap: 'anywhere', lineHeight: 1.25 }}>{metric.value}</span>
                 </div>
               ))}
             </div>
@@ -1409,12 +1409,13 @@ function DashboardView() {
               items={recommendationItems}
               weather={weather}
               onSelectFragrance={openFragranceDetail}
+              onExploreVault={handleViewVault}
             />
           ) : null}
           </div>
         </div>
 
-        {!agentActive && !vaultSearchUiActive ? (
+        {!agentActive && !vaultSearchUiActive && recommendationItems.length > 0 ? (
           <div className="mx-auto mt-4 flex max-w-[52rem] justify-center sm:mt-8">
             <button
               type="button"
