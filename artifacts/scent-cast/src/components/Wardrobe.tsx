@@ -2494,51 +2494,74 @@ export const Wardrobe: React.FC<{
               <p className="mt-2 text-sm leading-relaxed text-scent-text-muted">Try a shorter name, or search by brand alone.</p>
             </div>
           ) : (
-            <section aria-labelledby="vault-welcome-title" className="scent-onboarding-card mx-auto grid w-full max-w-6xl overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24 lg:grid-cols-2">
-              <div className="flex flex-col items-start px-6 py-8 sm:p-10 lg:p-12">
-                <div className="mb-6 flex items-center gap-3">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-full border border-scent-accent/25 bg-scent-accent/[0.04]" aria-hidden>
-                    <VaultEmptyEmblem />
-                  </span>
-                  <p className="scent-type-label text-scent-accent">Your collection, considered</p>
+            <section aria-labelledby="vault-welcome-title" className="scent-onboarding-card mx-auto w-full max-w-6xl overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24">
+              <div className="grid lg:grid-cols-[1.1fr_1fr]">
+                <div className="flex flex-col items-start justify-center px-6 py-9 sm:p-10 lg:p-14">
+                  <p className="scent-type-label mb-6 flex items-center gap-3 text-scent-accent">
+                    <span className="h-px w-8 bg-scent-accent/60" aria-hidden />
+                    A collection that is yours
+                  </p>
+                  <h3 id="vault-welcome-title" className="max-w-lg font-serif italic text-[2.5rem] leading-[1.08] text-foreground sm:text-5xl lg:text-[3.5rem]">
+                    Start with the bottles <span className="text-scent-accent">you actually wear.</span>
+                  </h3>
+                  <p className="mt-6 max-w-sm text-[15px] leading-7 text-scent-text-muted sm:text-base">
+                    The everyday favorite. The evening signature. The one that feels like you. Bring them together, and make every next choice more personal.
+                  </p>
+                  {onExpandArchive && (
+                    <button
+                      type="button"
+                      onClick={() => onExpandArchive({ target: 'vault' })}
+                      className="scent-primary-button mt-8 inline-flex min-h-[56px] w-full items-center justify-center gap-3 rounded-scent px-6 py-3.5 sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+                    >
+                      <span className="font-serif italic text-xl">Add your first fragrance</span>
+                      <ArrowRight size={18} strokeWidth={1.75} aria-hidden />
+                    </button>
+                  )}
+                  <p className="mt-3 text-sm text-scent-text-subtle">Find a bottle by name or brand.</p>
                 </div>
-                <h3 id="vault-welcome-title" className="max-w-md font-serif italic text-4xl leading-[1.12] text-foreground sm:text-5xl">
-                  Every great rotation starts with one bottle.
-                </h3>
-                <p className="mt-5 max-w-md text-[15px] leading-7 text-scent-text-muted sm:text-base">
-                  Bring the fragrances you love into one place. Start with a favorite, then add two more to unlock daily recommendations shaped by your collection and the weather.
-                </p>
-                {onExpandArchive && (
-                  <button
-                    type="button"
-                    onClick={() => onExpandArchive({ target: 'vault' })}
-                    className="scent-primary-button mt-8 inline-flex min-h-[56px] w-full items-center justify-center gap-3 rounded-scent px-6 py-3.5 sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background"
-                  >
-                    <Search size={18} strokeWidth={1.75} aria-hidden />
-                    <span className="font-serif italic text-xl">Add your first fragrance</span>
-                    <ArrowRight size={18} strokeWidth={1.75} aria-hidden />
-                  </button>
-                )}
-                <p className="mt-3 text-sm text-scent-text-subtle">Search by fragrance name or brand.</p>
+                <div className="relative flex flex-col justify-center border-t border-scent-accent/15 bg-scent-accent/[0.025] px-6 py-8 sm:px-10 lg:border-l lg:border-t-0 lg:py-10">
+                  <div className="relative mx-auto w-full max-w-sm text-scent-accent" aria-hidden="true">
+                    <svg viewBox="0 0 400 290" fill="none" className="w-full">
+                      <defs>
+                        <linearGradient id="vault-glass" x1="140" y1="65" x2="275" y2="280" gradientUnits="userSpaceOnUse">
+                          <stop stopColor="currentColor" stopOpacity="0.2" />
+                          <stop offset="0.48" stopColor="currentColor" stopOpacity="0.025" />
+                          <stop offset="1" stopColor="currentColor" stopOpacity="0.12" />
+                        </linearGradient>
+                      </defs>
+                      <path d="M71 242V139a129 129 0 0 1 258 0v103M89 242V139a111 111 0 0 1 222 0v103" stroke="currentColor" strokeOpacity="0.15" />
+                      <path d="M28 253h344M58 263h284" stroke="currentColor" strokeOpacity="0.2" />
+                      <g stroke="currentColor" strokeWidth="1.2">
+                        <rect x="49" y="148" width="83" height="98" rx="13" fill="url(#vault-glass)" strokeOpacity="0.45" />
+                        <rect x="72" y="122" width="37" height="26" rx="3" fill="currentColor" fillOpacity="0.08" strokeOpacity="0.5" />
+                        <path d="M59 163v62M64 172h53v39H64z" strokeOpacity="0.23" />
+                        <rect x="269" y="134" width="67" height="112" rx="7" fill="url(#vault-glass)" strokeOpacity="0.45" />
+                        <rect x="283" y="105" width="39" height="29" rx="2" fill="currentColor" fillOpacity="0.08" strokeOpacity="0.5" />
+                        <path d="M278 149v77M279 162h47v42h-47z" strokeOpacity="0.23" />
+                        <path d="M151 111h98c8 0 14 6 14 14v108c0 8-6 14-14 14h-98c-8 0-14-6-14-14V125c0-8 6-14 14-14Z" fill="url(#vault-glass)" strokeOpacity="0.8" />
+                        <rect x="174" y="72" width="52" height="33" rx="3" fill="currentColor" fillOpacity="0.14" strokeOpacity="0.7" />
+                        <path d="M180 105v6m40-6v6M147 127v101M157 151h86v58h-86zM187 172h26m-34 9h42m-27 9h12" strokeOpacity="0.5" />
+                        <path d="M182 78v20m7-20v20m7-20v20m7-20v20m7-20v20m7-20v20" strokeOpacity="0.2" />
+                      </g>
+                      <path d="m200 21 2.5 7.5L210 31l-7.5 2.5L200 41l-2.5-7.5L190 31l7.5-2.5Z" fill="currentColor" fillOpacity="0.65" />
+                    </svg>
+                  </div>
+                  <p className="mb-5 text-center font-serif italic text-2xl text-foreground">Your favorites. A clearer direction.</p>
+                  <VaultDiscoveryProgress count={vaultCount} variant="banner" className="mx-auto w-full max-w-sm" />
+                </div>
               </div>
-              <div className="border-t border-scent-accent/15 bg-scent-accent/[0.025] px-6 py-8 sm:p-10 lg:border-l lg:border-t-0 lg:p-12">
-                <p className="scent-type-label text-scent-accent">More from every bottle</p>
-                <dl className="mt-6 space-y-6">
-                  {[
-                    { number: '01', title: 'Know what you own', description: 'Keep your favorites together and explore the notes, scent families, and character of each fragrance.' },
-                    { number: '02', title: 'Find what fits today', description: 'Let your collection meet the forecast, with daily picks that take the weather into account.' },
-                    { number: '03', title: 'Discover with direction', description: 'Ask Beam to compare your fragrances and help you explore what could come next.' },
-                  ].map(({ number, title, description }) => (
-                    <div key={number} className="flex gap-4">
-                      <span className="pt-1 font-mono text-xs text-scent-accent/75" aria-hidden>{number}</span>
-                      <div>
-                        <dt className="text-lg font-medium text-foreground">{title}</dt>
-                        <dd className="mt-1.5 text-sm leading-6 text-scent-text-muted">{description}</dd>
-                      </div>
-                    </div>
-                  ))}
-                </dl>
-                <VaultDiscoveryProgress count={vaultCount} variant="banner" className="mt-8" />
+              <div className="grid border-t border-scent-accent/15 sm:grid-cols-3">
+                {[
+                  { number: '01', title: 'Know your collection', description: 'Explore the notes and character behind every bottle.' },
+                  { number: '02', title: 'Wear it well', description: 'Add three fragrances to unlock picks shaped by the weather.' },
+                  { number: '03', title: 'Find your next favorite', description: 'Ask Beam to compare scents and guide your next discovery.' },
+                ].map(({ number, title, description }) => (
+                  <div key={number} className="border-b border-scent-accent/10 px-6 py-6 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 sm:px-8">
+                    <p className="mb-3 font-mono text-xs text-scent-accent/75" aria-hidden>{number}</p>
+                    <h4 className="text-base font-medium text-foreground">{title}</h4>
+                    <p className="mt-2 max-w-xs text-sm leading-6 text-scent-text-muted">{description}</p>
+                  </div>
+                ))}
               </div>
             </section>
           )}
