@@ -1158,7 +1158,7 @@ function DashboardView() {
             structural complaint left was total vertical height — the savings
             come from the empty transitions between modules, not from the
             modules themselves. */}
-        <div className={`flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-3 pt-0 pb-[calc(var(--bottomnav-h)+1rem)] sm:min-h-0 sm:gap-6 sm:pt-0 sm:pb-0 lg:gap-8 ${agentActive ? '' : 'justify-between sm:justify-start'}`}>
+        <div className={`flex min-h-[calc(100svh-var(--topbar-h))] flex-col gap-3 pt-0 pb-[calc(var(--bottomnav-h)+1rem)] sm:min-h-0 sm:gap-6 sm:pt-0 sm:pb-0 lg:gap-8 ${agentActive ? '' : items.length === 0 ? '!min-h-0 !justify-start !gap-6 !pb-2' : 'justify-between sm:justify-start'}`}>
           {/* The hero ticker sits flush against the fixed top bar (no padding
               above it) so it visually replaces the bar's old bottom hairline. */}
           <HomepageHeroMarquee />
@@ -1409,7 +1409,7 @@ function DashboardView() {
               items={recommendationItems}
               weather={weather}
               onSelectFragrance={openFragranceDetail}
-              onExploreVault={handleViewVault}
+              onExploreVault={items.length === 0 ? () => handleExpandArchive({ target: 'vault' }) : handleViewVault}
             />
           ) : null}
           </div>
@@ -1429,7 +1429,7 @@ function DashboardView() {
         ) : null}
 
         {/* A single section gap separates the forecast and collection. */}
-        <div id="scent-vault-section" className="scent-deferred-section !mt-12 sm:!mt-16 lg:!mt-20" style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1.5rem)' }}>
+        <div id="scent-vault-section" className="scent-deferred-section !mt-8 sm:!mt-12 lg:!mt-16" style={{ scrollMarginTop: 'calc(var(--topbar-h) + 1.5rem)' }}>
             <React.Suspense fallback={<WardrobeFallback />}>
               <Wardrobe
                 items={items}
@@ -1586,7 +1586,7 @@ function DashboardView() {
           </div>
       ) : null}
 
-      <AppFooter showExploreLinks className="mt-8 sm:mt-12" />
+      <AppFooter showExploreLinks className="mt-6 sm:mt-8" />
     </div>
   );
 }

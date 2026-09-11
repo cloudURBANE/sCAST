@@ -953,7 +953,7 @@ const VaultDiscoveryProgress: React.FC<{
 
   const header = (
     <div className="flex items-center justify-between gap-4">
-      <span className="scent-type-label text-scent-accent/80">Discovery signal</span>
+      <span className="scent-type-label text-scent-accent/80">Daily scent forecast</span>
       <span className="font-mono text-[11px] font-semibold tabular-nums text-scent-accent">
         {progress}/{DISCOVERY_TARGET}
       </span>
@@ -968,9 +968,11 @@ const VaultDiscoveryProgress: React.FC<{
         {header}
         <div className="mt-2.5">{segments}</div>
         <p className="mt-2.5 text-[13px] leading-snug text-scent-text-muted">
-          {remaining === 1
-            ? 'One more bottle unlocks daily recommendations.'
-            : `${remaining} more bottles unlock daily recommendations.`}
+          {remaining === 0
+            ? 'Your daily recommendations are unlocked.'
+            : remaining === 1
+              ? 'Add one more bottle to unlock your forecast.'
+              : `Add ${remaining} bottles to unlock your forecast.`}
         </p>
       </div>
     );
@@ -2126,7 +2128,7 @@ export const Wardrobe: React.FC<{
 
   return (
     <div className="relative">
-      <div className="space-y-8 sm:space-y-10 relative z-10">
+      <div className="space-y-5 sm:space-y-8 relative z-10">
         <div className="flex flex-col items-center justify-center text-center gap-7 sm:gap-8">
           {/* Header block: title, one-line purpose, live count badge. The old
               full-bleed divider line with "0 Entries" perched on it read as a
@@ -2138,7 +2140,7 @@ export const Wardrobe: React.FC<{
           <div className="space-y-2.5">
             <h2 className="font-serif italic text-[clamp(2.4rem,6.5vw,4.25rem)] text-foreground tracking-normal leading-none">Vault of Aromas</h2>
             <p className="mx-auto max-w-md text-[15px] leading-relaxed text-scent-text-muted sm:text-base">
-              Your collection — the signal behind every recommendation.
+              Your bottles. Your notes. Your daily picks.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-2.5">
               <div role="status" aria-live="polite" aria-atomic="true">
@@ -2147,12 +2149,12 @@ export const Wardrobe: React.FC<{
                   <span className="scent-type-label text-scent-accent/80">{filteredItems.length === 1 ? 'Entry' : 'Entries'}</span>
                 </span>
               </div>
-              <VaultWithMeSelector
+              {!showEmptyVaultState && <VaultWithMeSelector
                 items={items}
                 state={withMeState}
                 onSave={onSaveWithMe}
                 onAddFragrance={() => onExpandArchive?.({ target: 'vault' })}
-              />
+              />}
             </div>
           </div>
           <div className="flex flex-col items-center gap-6 w-full">
@@ -2384,7 +2386,7 @@ export const Wardrobe: React.FC<{
         )}
 
         {/* The page shell reserves bottom-nav clearance after the footer. */}
-        <div className="space-y-8 pb-8 sm:pb-10">
+        <div className="space-y-6 pb-2 sm:pb-4">
           {showDiscoveryBanner ? (
             <VaultDiscoveryProgress
               count={vaultCount}
@@ -2494,75 +2496,50 @@ export const Wardrobe: React.FC<{
               <p className="mt-2 text-sm leading-relaxed text-scent-text-muted">Try a shorter name, or search by brand alone.</p>
             </div>
           ) : (
-            <section aria-labelledby="vault-welcome-title" className="scent-onboarding-card mx-auto w-full max-w-6xl overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/24">
-              <div className="grid lg:grid-cols-[1.1fr_1fr]">
-                <div className="flex flex-col items-start justify-center px-6 py-9 sm:p-10 lg:p-14">
-                  <p className="scent-type-label mb-6 flex items-center gap-3 text-scent-accent">
-                    <span className="h-px w-8 bg-scent-accent/60" aria-hidden />
-                    A collection that is yours
-                  </p>
-                  <h3 id="vault-welcome-title" className="max-w-lg font-serif italic text-[2.5rem] leading-[1.08] text-foreground sm:text-5xl lg:text-[3.5rem]">
-                    Start with the bottles <span className="text-scent-accent">you actually wear.</span>
+            <section aria-labelledby="vault-welcome-title" className="scent-onboarding-card mx-auto w-full max-w-4xl overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/20">
+              <div className="grid gap-6 p-5 sm:grid-cols-[1.15fr_1fr] sm:items-center sm:gap-10 sm:p-8">
+                <div className="min-w-0">
+                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/25 bg-scent-accent/[0.06] text-scent-accent" aria-hidden="true">
+                    <Sparkles size={19} strokeWidth={1.5} />
+                  </div>
+                  <h3 id="vault-welcome-title" className="font-serif italic text-3xl leading-tight text-foreground sm:text-4xl">
+                    Your collection starts here.
                   </h3>
-                  <p className="mt-6 max-w-sm text-[15px] leading-7 text-scent-text-muted sm:text-base">
-                    The everyday favorite. The evening signature. The one that feels like you. Bring them together, and make every next choice more personal.
+                  <p className="mt-2 max-w-sm text-sm leading-6 text-scent-text-muted">
+                    Add a favorite to explore its notes. With three bottles, unlock your daily scent forecast.
                   </p>
                   {onExpandArchive && (
                     <button
                       type="button"
                       onClick={() => onExpandArchive({ target: 'vault' })}
-                      className="scent-primary-button mt-8 inline-flex min-h-[56px] w-full items-center justify-center gap-3 rounded-scent px-6 py-3.5 sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background"
+                      className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-scent-accent px-5 py-3 text-sm font-semibold text-[#17130a] transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background sm:w-auto"
                     >
-                      <span className="font-serif italic text-xl">Add your first fragrance</span>
-                      <ArrowRight size={18} strokeWidth={1.75} aria-hidden />
+                      Add your first fragrance
+                      <ArrowRight size={17} strokeWidth={1.75} aria-hidden />
                     </button>
                   )}
-                  <p className="mt-3 text-sm text-scent-text-subtle">Find a bottle by name or brand.</p>
+                  <p className="mt-2 text-xs leading-5 text-scent-text-subtle">Search by fragrance or brand.</p>
                 </div>
-                <div className="relative flex flex-col justify-center border-t border-scent-accent/15 bg-scent-accent/[0.025] px-6 py-8 sm:px-10 lg:border-l lg:border-t-0 lg:py-10">
-                  <div className="relative mx-auto w-full max-w-sm text-scent-accent" aria-hidden="true">
-                    <svg viewBox="0 0 400 290" fill="none" className="w-full">
-                      <defs>
-                        <linearGradient id="vault-glass" x1="140" y1="65" x2="275" y2="280" gradientUnits="userSpaceOnUse">
-                          <stop stopColor="currentColor" stopOpacity="0.2" />
-                          <stop offset="0.48" stopColor="currentColor" stopOpacity="0.025" />
-                          <stop offset="1" stopColor="currentColor" stopOpacity="0.12" />
-                        </linearGradient>
-                      </defs>
-                      <path d="M71 242V139a129 129 0 0 1 258 0v103M89 242V139a111 111 0 0 1 222 0v103" stroke="currentColor" strokeOpacity="0.15" />
-                      <path d="M28 253h344M58 263h284" stroke="currentColor" strokeOpacity="0.2" />
-                      <g stroke="currentColor" strokeWidth="1.2">
-                        <rect x="49" y="148" width="83" height="98" rx="13" fill="url(#vault-glass)" strokeOpacity="0.45" />
-                        <rect x="72" y="122" width="37" height="26" rx="3" fill="currentColor" fillOpacity="0.08" strokeOpacity="0.5" />
-                        <path d="M59 163v62M64 172h53v39H64z" strokeOpacity="0.23" />
-                        <rect x="269" y="134" width="67" height="112" rx="7" fill="url(#vault-glass)" strokeOpacity="0.45" />
-                        <rect x="283" y="105" width="39" height="29" rx="2" fill="currentColor" fillOpacity="0.08" strokeOpacity="0.5" />
-                        <path d="M278 149v77M279 162h47v42h-47z" strokeOpacity="0.23" />
-                        <path d="M151 111h98c8 0 14 6 14 14v108c0 8-6 14-14 14h-98c-8 0-14-6-14-14V125c0-8 6-14 14-14Z" fill="url(#vault-glass)" strokeOpacity="0.8" />
-                        <rect x="174" y="72" width="52" height="33" rx="3" fill="currentColor" fillOpacity="0.14" strokeOpacity="0.7" />
-                        <path d="M180 105v6m40-6v6M147 127v101M157 151h86v58h-86zM187 172h26m-34 9h42m-27 9h12" strokeOpacity="0.5" />
-                        <path d="M182 78v20m7-20v20m7-20v20m7-20v20m7-20v20m7-20v20" strokeOpacity="0.2" />
-                      </g>
-                      <path d="m200 21 2.5 7.5L210 31l-7.5 2.5L200 41l-2.5-7.5L190 31l7.5-2.5Z" fill="currentColor" fillOpacity="0.65" />
-                    </svg>
-                  </div>
-                  <p className="mb-5 text-center font-serif italic text-2xl text-foreground">Your favorites. A clearer direction.</p>
-                  <VaultDiscoveryProgress count={vaultCount} variant="banner" className="mx-auto w-full max-w-sm" />
+                <VaultDiscoveryProgress count={vaultCount} variant="banner" className="w-full" />
+              </div>
+              <details className="group border-t border-scent-accent/15">
+                <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-scent-text-muted transition-colors hover:text-scent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent sm:px-8 [&::-webkit-details-marker]:hidden">
+                  What your vault unlocks
+                  <ChevronDown size={16} className="shrink-0 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
+                </summary>
+                <div className="grid gap-4 px-5 pb-5 sm:grid-cols-3 sm:gap-6 sm:px-8 sm:pb-6">
+                  {[
+                    { title: 'Know your notes', description: 'Explore the notes and character of each bottle.' },
+                    { title: 'Match the weather', description: 'Get daily picks from the fragrances you own.' },
+                    { title: 'Discover with Beam', description: 'Compare scents and explore your next favorite.' },
+                  ].map(({ title, description }) => (
+                    <div key={title} className="border-l border-scent-accent/25 pl-3">
+                      <h4 className="text-sm font-medium text-foreground">{title}</h4>
+                      <p className="mt-1 text-xs leading-5 text-scent-text-muted">{description}</p>
+                    </div>
+                  ))}
                 </div>
-              </div>
-              <div className="grid border-t border-scent-accent/15 sm:grid-cols-3">
-                {[
-                  { number: '01', title: 'Know your collection', description: 'Explore the notes and character behind every bottle.' },
-                  { number: '02', title: 'Wear it well', description: 'Add three fragrances to unlock picks shaped by the weather.' },
-                  { number: '03', title: 'Find your next favorite', description: 'Ask Beam to compare scents and guide your next discovery.' },
-                ].map(({ number, title, description }) => (
-                  <div key={number} className="border-b border-scent-accent/10 px-6 py-6 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 sm:px-8">
-                    <p className="mb-3 font-mono text-xs text-scent-accent/75" aria-hidden>{number}</p>
-                    <h4 className="text-base font-medium text-foreground">{title}</h4>
-                    <p className="mt-2 max-w-xs text-sm leading-6 text-scent-text-muted">{description}</p>
-                  </div>
-                ))}
-              </div>
+              </details>
             </section>
           )}
         </div>

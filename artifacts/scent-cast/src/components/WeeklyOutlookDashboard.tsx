@@ -830,16 +830,16 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
       </h2>
 
       {items.length === 0 ? (
-        <div className="mx-auto mt-[var(--fc-title-hero)] flex w-full max-w-[46rem] flex-col items-center gap-4 rounded-[28px] border border-scent-accent/20 bg-gradient-to-b from-white/[0.055] to-black/20 px-6 py-7 sm:flex-row sm:gap-6 sm:px-8 sm:py-8 sm:text-left">
+        <div className="mx-auto mt-[var(--fc-title-hero)] flex w-full max-w-[46rem] flex-row flex-wrap items-center gap-3 rounded-[20px] border border-scent-accent/20 bg-gradient-to-b from-white/[0.055] to-black/20 px-4 py-4 text-left sm:gap-5 sm:px-6 sm:py-5">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/5 text-scent-accent" aria-hidden>
             <Sparkles size={23} strokeWidth={1.5} />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="font-serif text-xl italic leading-snug text-foreground sm:text-2xl">A forecast made for your collection.</p>
-            <p className="mt-2 text-sm leading-6 text-scent-text-muted">Add your fragrances to discover what to wear with the weather.</p>
+            <p className="font-serif text-xl italic leading-snug text-foreground sm:text-2xl">Your next wear, weather-matched.</p>
+            <p className="mt-2 text-sm leading-6 text-scent-text-muted">Build your vault to get personal daily picks.</p>
           </div>
           {onExploreVault && (
-            <button type="button" onClick={() => onExploreVault()} className="scent-primary-button inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-scent px-5 py-3 text-sm sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+            <button type="button" onClick={() => onExploreVault()} className="inline-flex min-h-11 w-full shrink-0 items-center justify-center rounded-full border border-scent-accent/40 bg-scent-accent/[0.06] px-5 py-2 text-sm font-medium text-scent-accent transition-colors hover:bg-scent-accent/15 sm:w-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background">
               Build your vault
             </button>
           )}
