@@ -78,9 +78,9 @@ interface MotionProfile {
 }
 
 const fullMotionProfile: MotionProfile = {
-  duration: 0.52,
+  duration: 0.34,
   coverDuration: 0.08,
-  revealDuration: 0.26,
+  revealDuration: 0.14,
   emblemSize: 92,
   bloomSize: 192,
   innerRingSize: 136,
@@ -91,7 +91,7 @@ const fullMotionProfile: MotionProfile = {
   innerRingOpacity: [0, 0.42, 0],
   outerRingScale: [0.42, 1.06, 1.58],
   outerRingOpacity: [0, 0.18, 0],
-  emblemRotate: [-6, 24, 0],
+  emblemRotate: [0, 0, 0],
   emblemScale: [0.76, 1.02, 0.99, 1],
   showBloom: false,
   showOuterRing: false,
@@ -111,7 +111,7 @@ const compactMotionProfile: MotionProfile = {
   innerRingOpacity: [0, 0.28, 0],
   outerRingScale: [0.66, 1, 1.2],
   outerRingOpacity: [0, 0.1, 0],
-  emblemRotate: [-4, 18, 0],
+  emblemRotate: [0, 0, 0],
   emblemScale: [0.9, 1.03, 0.99, 1],
   showBloom: false,
   showOuterRing: false,
@@ -210,11 +210,11 @@ export const PageTransitionOverlay: React.FC<PageTransitionOverlayProps> = ({
           ) : null}
 
           <m.div
-            initial={{ scale: profile.innerRingScale[0], opacity: 0, rotate: -96 }}
+            initial={{ scale: profile.innerRingScale[0], opacity: 0, rotate: 0 }}
             animate={{
               scale: profile.innerRingScale,
               opacity: profile.innerRingOpacity,
-              rotate: [-96, 48, 156],
+              rotate: [0, 0, 0],
             }}
             transition={{ duration: profile.duration, times: [0, 0.46, 1], ease: SCENT_EASE_OUT }}
             aria-hidden="true"

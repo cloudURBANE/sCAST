@@ -199,7 +199,7 @@ export function PushPrompt() {
             type="button"
             onClick={dismiss}
             aria-label="Dismiss notification prompt"
-            className="-mr-1.5 -mt-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-white/10 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+            className="-mr-1.5 -mt-1.5 inline-flex h-11 w-11 shrink-0 active:bg-white/15 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-white/10 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
           >
             <X size={15} strokeWidth={2} aria-hidden />
           </button>

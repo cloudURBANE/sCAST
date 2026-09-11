@@ -2797,14 +2797,14 @@ export const Wardrobe: React.FC<{
                                             inputMode={field === 'year' ? 'numeric' : 'text'}
                                             placeholder={field === 'year' ? 'e.g. 2018' : `Add ${label.toLowerCase()}`}
                                             aria-label={`Verify ${label}`}
-                                            className="w-44 bg-black/45 border border-white/15 rounded-md px-3 py-1.5 text-sm text-center text-foreground outline-none focus:border-scent-accent/50 disabled:opacity-40"
+                                            className="w-44 min-w-0 bg-black/45 border border-white/15 rounded-md px-3 py-1.5 text-sm text-center text-foreground outline-none focus:border-scent-accent/50 disabled:opacity-40"
                                           />
                                           <button
                                             type="button"
                                             onClick={() => void commitFactEdit()}
                                             disabled={factSaving || !factDraft.trim()}
                                             aria-label={`Save ${label}`}
-                                            className="flex h-8 w-8 items-center justify-center rounded-md border border-white/15 text-scent-text-muted hover:border-scent-accent/45 hover:text-scent-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md active:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 border border-white/15 text-scent-text-muted hover:border-scent-accent/45 hover:text-scent-accent disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                           >
                                             <Check size={15} strokeWidth={2} />
                                           </button>
@@ -2813,7 +2813,7 @@ export const Wardrobe: React.FC<{
                                             onClick={cancelFactEdit}
                                             disabled={factSaving}
                                             aria-label={`Cancel editing ${label}`}
-                                            className="flex h-8 w-8 items-center justify-center rounded-md border border-white/15 text-scent-text-muted hover:border-white/35 hover:text-white disabled:opacity-30 transition-colors"
+                                            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md active:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 border border-white/15 text-scent-text-muted hover:border-white/35 hover:text-white disabled:opacity-30 transition-colors"
                                           >
                                             <X size={15} strokeWidth={2} />
                                           </button>
@@ -2855,7 +2855,7 @@ export const Wardrobe: React.FC<{
                                           <Pencil
                                             size={11}
                                             strokeWidth={1.75}
-                                            className="opacity-0 group-hover:opacity-60 transition-opacity"
+                                            className="opacity-40 group-hover:opacity-80 group-focus-visible:opacity-100 transition-opacity"
                                           />
                                         </button>
                                       ) : (
@@ -3550,7 +3550,7 @@ export const Wardrobe: React.FC<{
                     {deleteBusy ? (
                       <RefreshCw size={14} strokeWidth={1.75} className="animate-spin" aria-hidden />
                     ) : (
-                      <Trash2 size={14} strokeWidth={1.75} className={deleteConfirming ? '' : 'group-hover:animate-bounce'} />
+                      <Trash2 size={14} strokeWidth={1.75} aria-hidden="true" />
                     )}
                     <span className="hidden sm:inline">
                       {deleteBusy ? 'Deleting…' : deleteConfirming ? 'Confirm delete' : 'Delete from vault'}

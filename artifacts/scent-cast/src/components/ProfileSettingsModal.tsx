@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { m, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { SCENT_EASE_OUT_EXPO } from '@/lib/motion';
 import { BellRing, Check, CloudSun, Download, Languages, LocateFixed, LoaderCircle, Palette, ShieldAlert, SlidersHorizontal, Trash2, UserRound, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -71,7 +71,7 @@ const NotificationToggle: React.FC<{
           checked ? 'translate-x-6' : 'translate-x-1'
         }`}
       >
-        {busy && <LoaderCircle size={11} className="animate-spin text-black/60" aria-hidden="true" />}
+        {busy && <LoaderCircle size={11} className="motion-safe:animate-spin text-black/60" aria-hidden="true" />}
       </span>
     </button>
   </div>
@@ -132,7 +132,7 @@ function SegmentedControl<T extends string>({
               </span>
             </span>
             {option.hint ? (
-              <span className="text-[10px] leading-snug text-white/40">{option.hint}</span>
+              <span className="text-[11px] leading-snug text-white/40">{option.hint}</span>
             ) : null}
           </button>
         );
@@ -194,6 +194,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   const [pushBusy, setPushBusy] = useState(false);
   const [pushPrefs, setPushPrefs] = useState<PushPreferences>({ weather: true, community: true, curation: true });
   const [prefBusy, setPrefBusy] = useState<null | keyof PushPreferences>(null);
+  const reduceMotion = useReducedMotion();
   const modalRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -485,22 +486,23 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence propagate>
       {isOpen && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center">
+        <m.div exit={{ opacity: 0 }} transition={{ duration: 0.12 }} className="fixed inset-0 z-[200] flex items-end justify-center sm:items-center">
           <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
             onClick={onClose}
             className="absolute inset-0 bg-black/90"
           />
           <m.div
             ref={modalRef}
-            initial={{ opacity: 0, y: 40 }}
+            initial={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 40 }}
-            transition={{ duration: 0.25, ease: SCENT_EASE_OUT_EXPO }}
+            exit={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
+            transition={{ duration: reduceMotion ? 0.12 : 0.22, ease: SCENT_EASE_OUT_EXPO }}
             className="relative max-h-[92svh] w-full overflow-hidden border-t border-white/10 bg-neutral-950 shadow-2xl sm:mx-6 sm:max-w-xl sm:rounded-[1.5rem] sm:border"
             role="dialog"
             aria-modal="true"
@@ -508,21 +510,21 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
           >
             <div className="flex items-center justify-between border-b border-white/5 px-6 py-5">
               <div className="flex min-w-0 items-center gap-3">
-                <div className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-scent-accent" />
+                <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-scent-accent" />
                 <div className="min-w-0">
-                  <p id="profile-modal-title" className="text-[9px] font-bold uppercase tracking-[0.5em] text-scent-accent">
+                  <p id="profile-modal-title" className="text-[11px] font-bold uppercase tracking-[0.5em] text-scent-accent">
                     {t('settings.eyebrow')}
                   </p>
-                  <p className="mt-0.5 font-sans text-[9px] text-white/40">{t('settings.subtitle')}</p>
+                  <p className="mt-0.5 font-sans text-[11px] text-white/40">{t('settings.subtitle')}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={onClose}
                 aria-label={t('common.close')}
-                className="group ml-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                className="group ml-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-white transition-colors active:bg-white/15 hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
-                <X size={16} className="transition-transform duration-300 group-hover:rotate-90" />
+                <X size={16} aria-hidden="true" />
               </button>
             </div>
 
@@ -536,7 +538,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       <UserRound size={16} aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
-                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-foreground">{t('profile.title')}</h3>
+                      <h3 className="text-[11px] font-bold uppercase tracking-[0.34em] text-foreground">{t('profile.title')}</h3>
                       <p className="mt-0.5 text-[11px] text-white/35">{t('profile.subtitle')}</p>
                     </div>
                   </div>
@@ -549,7 +551,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     }}
                   >
                     <label htmlFor="profile-username" className="block">
-                      <span className="text-[9px] font-bold uppercase tracking-[0.32em] text-white/35">{t('profile.usernameLabel')}</span>
+                      <span className="text-[11px] font-bold uppercase tracking-[0.32em] text-white/35">{t('profile.usernameLabel')}</span>
                       <input
                         id="profile-username"
                         ref={inputRef}
@@ -589,7 +591,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-scent-accent/30 bg-scent-accent/[0.08] px-4 py-3 text-[13px] font-semibold uppercase tracking-[0.16em] text-foreground transition-colors hover:border-scent-accent/55 hover:bg-scent-accent/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/35 disabled:pointer-events-none disabled:opacity-45"
                     >
                       {saving ? (
-                        <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+                        <LoaderCircle size={15} className="motion-safe:animate-spin" aria-hidden="true" />
                       ) : (
                         <Check size={15} strokeWidth={2} aria-hidden="true" />
                       )}
@@ -604,14 +606,14 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       <Palette size={16} aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
-                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-foreground">{t('appearance.title')}</h3>
+                      <h3 className="text-[11px] font-bold uppercase tracking-[0.34em] text-foreground">{t('appearance.title')}</h3>
                       <p className="mt-0.5 text-[11px] text-white/35">{t('appearance.subtitle')}</p>
                     </div>
                   </div>
 
                   <div className="space-y-3">
                     <div>
-                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('appearance.themeLabel')}</p>
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-white/30">{t('appearance.themeLabel')}</p>
                       <SegmentedControl<ThemeMode>
                         ariaLabel={t('appearance.themeLabel')}
                         value={theme}
@@ -623,7 +625,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       />
                     </div>
                     <div>
-                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('appearance.accentLabel')}</p>
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-white/30">{t('appearance.accentLabel')}</p>
                       <SegmentedControl<AccentName>
                         ariaLabel={t('appearance.accentLabel')}
                         value={accent}
@@ -643,14 +645,14 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       <SlidersHorizontal size={16} aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
-                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-foreground">{t('scentTaste.title')}</h3>
+                      <h3 className="text-[11px] font-bold uppercase tracking-[0.34em] text-foreground">{t('scentTaste.title')}</h3>
                       <p className="mt-0.5 text-[11px] text-white/35">{t('scentTaste.subtitle')}</p>
                     </div>
                   </div>
 
                   <div className="space-y-4">
                     <div>
-                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.loveLabel')}</p>
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.loveLabel')}</p>
                       <div className="flex flex-wrap gap-2" role="group" aria-label={t('scentTaste.loveLabel')}>
                         {SCENT_FAMILIES.map((family) => (
                           <TasteChip
@@ -665,7 +667,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     </div>
 
                     <div>
-                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.avoidLabel')}</p>
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.avoidLabel')}</p>
                       <div className="flex flex-wrap gap-2" role="group" aria-label={t('scentTaste.avoidLabel')}>
                         {SCENT_FAMILIES.map((family) => (
                           <TasteChip
@@ -680,7 +682,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     </div>
 
                     <div>
-                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.longevityLabel')}</p>
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.longevityLabel')}</p>
                       <SegmentedControl<'short' | 'normal' | 'long'>
                         ariaLabel={t('scentTaste.longevityLabel')}
                         value={(scentPreferences.scentLastsOnMe ?? '') as 'short' | 'normal' | 'long'}
@@ -694,7 +696,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     </div>
 
                     <div>
-                      <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.projectionLabel')}</p>
+                      <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-white/30">{t('scentTaste.projectionLabel')}</p>
                       <SegmentedControl<'subtle' | 'noticeable'>
                         ariaLabel={t('scentTaste.projectionLabel')}
                         value={(scentPreferences.projectionPreference ?? '') as 'subtle' | 'noticeable'}
@@ -719,12 +721,12 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         <Languages size={16} aria-hidden="true" />
                       </span>
                       <div className="min-w-0">
-                        <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-foreground">{t('language.title')}</h3>
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.34em] text-foreground">{t('language.title')}</h3>
                         <p className="mt-0.5 text-[11px] text-white/35">{t('language.subtitle')}</p>
                       </div>
                     </div>
 
-                    <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('language.label')}</p>
+                    <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-white/30">{t('language.label')}</p>
                     <SegmentedControl<Locale>
                       ariaLabel={t('language.label')}
                       value={locale}
@@ -740,20 +742,20 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       <CloudSun size={17} aria-hidden="true" />
                     </span>
                     <div className="min-w-0">
-                      <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-foreground">{t('atmosphere.title')}</h3>
+                      <h3 className="text-[11px] font-bold uppercase tracking-[0.34em] text-foreground">{t('atmosphere.title')}</h3>
                       <p className="mt-0.5 text-[11px] text-white/35">{locationSourceLabel}</p>
                     </div>
                   </div>
 
                   <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="rounded-[10px] border border-white/10 bg-black/25 px-3.5 py-3">
-                      <dt className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('atmosphere.locationLabel')}</dt>
+                      <dt className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/30">{t('atmosphere.locationLabel')}</dt>
                       <dd className="mt-1 min-w-0 truncate text-sm text-foreground" title={weatherLoading ? t('atmosphere.loading') : weatherLocation}>
                         {weatherLoading ? t('atmosphere.loading') : weatherLocation}
                       </dd>
                     </div>
                     <div className="rounded-[10px] border border-white/10 bg-black/25 px-3.5 py-3">
-                      <dt className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">{t('atmosphere.statusLabel')}</dt>
+                      <dt className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/30">{t('atmosphere.statusLabel')}</dt>
                       <dd className="mt-1 min-w-0 truncate text-sm text-foreground" title={t(`atmosphere.status.${locationStatus}`)}>
                         {t(`atmosphere.status.${locationStatus}`)}
                       </dd>
@@ -767,7 +769,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                     className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-scent-accent/35 bg-scent-accent px-4 py-3 text-[13px] font-bold uppercase tracking-[0.16em] text-black shadow-[0_14px_34px_-20px_rgba(0,0,0,0.6)] transition-[filter,background-color] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 disabled:cursor-wait disabled:opacity-70"
                   >
                     {locating ? (
-                      <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+                      <LoaderCircle size={15} className="motion-safe:animate-spin" aria-hidden="true" />
                     ) : (
                       <LocateFixed size={15} strokeWidth={2} aria-hidden="true" />
                     )}
@@ -782,7 +784,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         <BellRing size={16} aria-hidden="true" />
                       </span>
                       <div className="min-w-0">
-                        <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-foreground">{t('notifications.title')}</h3>
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.34em] text-foreground">{t('notifications.title')}</h3>
                         <p className="mt-0.5 text-[11px] text-white/35">{t('notifications.subtitle')}</p>
                       </div>
                     </div>
@@ -829,14 +831,14 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                                 pushState === 'on' ? 'translate-x-6' : 'translate-x-1'
                               }`}
                             >
-                              {pushBusy && <LoaderCircle size={11} className="animate-spin text-black/60" aria-hidden="true" />}
+                              {pushBusy && <LoaderCircle size={11} className="motion-safe:animate-spin text-black/60" aria-hidden="true" />}
                             </span>
                           </button>
                         </div>
 
                         {pushState === 'on' && (
                           <div className="mt-3 space-y-2">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.28em] text-white/30">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-white/30">
                               {t('notifications.whatToSend')}
                             </p>
                             <NotificationToggle
@@ -863,7 +865,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                           </div>
                         )}
 
-                        <p className="mt-3 text-[10px] leading-snug text-white/35">
+                        <p className="mt-3 text-[11px] leading-snug text-white/35">
                           {t('notifications.privacyNote')}
                         </p>
                       </>
@@ -878,7 +880,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                         <ShieldAlert size={16} aria-hidden="true" />
                       </span>
                       <div className="min-w-0">
-                        <h3 className="text-[10px] font-bold uppercase tracking-[0.34em] text-foreground">Data &amp; account</h3>
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.34em] text-foreground">Data &amp; account</h3>
                         <p className="mt-0.5 text-[11px] text-white/35">Download your data, or permanently delete your account.</p>
                       </div>
                     </div>
@@ -890,7 +892,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                       className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-4 py-3 text-[13px] font-bold uppercase tracking-[0.16em] text-white/80 transition-colors hover:bg-white/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950 disabled:cursor-wait disabled:opacity-60"
                     >
                       {dataBusy === 'exporting' ? (
-                        <LoaderCircle size={15} className="animate-spin" aria-hidden="true" />
+                        <LoaderCircle size={15} className="motion-safe:animate-spin" aria-hidden="true" />
                       ) : (
                         <Download size={15} strokeWidth={2} aria-hidden="true" />
                       )}
@@ -929,7 +931,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
                             className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-full border border-red-500/40 bg-red-500/80 px-3 py-2 text-[12px] font-bold uppercase tracking-[0.14em] text-white transition-colors hover:bg-red-500 disabled:cursor-wait disabled:opacity-70"
                           >
                             {dataBusy === 'deleting' ? (
-                              <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+                              <LoaderCircle size={14} className="motion-safe:animate-spin" aria-hidden="true" />
                             ) : (
                               <Trash2 size={14} strokeWidth={2} aria-hidden="true" />
                             )}
@@ -943,7 +945,7 @@ export const ProfileSettingsModal: React.FC<ProfileSettingsModalProps> = ({
               </div>
             </div>
           </m.div>
-        </div>
+        </m.div>
       )}
     </AnimatePresence>
   );

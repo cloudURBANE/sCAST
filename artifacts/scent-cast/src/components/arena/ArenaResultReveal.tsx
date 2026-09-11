@@ -127,7 +127,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
               <button
                 type="button"
                 onClick={onSignIn}
-                className="shrink-0 rounded-full bg-scent-accent/14 px-2 py-1 text-[10px] font-bold uppercase leading-none tracking-[0.08em] text-scent-accent transition-colors hover:bg-scent-accent/24 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
+                className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full bg-scent-accent/14 px-2 py-1 text-[10px] font-bold uppercase leading-none tracking-[0.08em] text-scent-accent transition-colors hover:bg-scent-accent/24 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/55"
               >
                 Save
               </button>
@@ -143,7 +143,7 @@ export const ArenaResultReveal: React.FC<ArenaResultRevealProps> = ({
             type="button"
             onClick={() => setEditingReason(true)}
             aria-label={`Why it won: ${selectedReason.label}. Tap to change reason.`}
-            className="arena-badge-pop absolute right-2.5 top-2.5 z-20 inline-grid h-7 w-7 place-items-center rounded-full bg-scent-accent text-black shadow-[0_0_12px_rgba(212,175,55,0.22)] transition-transform duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:right-3 sm:top-3 sm:h-8 sm:w-8"
+            className="arena-badge-pop absolute right-2.5 top-2.5 z-20 inline-grid h-11 w-11 place-items-center rounded-full bg-scent-accent text-black shadow-[0_0_12px_rgba(212,175,55,0.22)] transition-transform duration-200 motion-safe:hover:scale-105 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60 sm:right-3 sm:top-3"
           >
             <Check size={14} strokeWidth={2.6} aria-hidden="true" />
           </button>

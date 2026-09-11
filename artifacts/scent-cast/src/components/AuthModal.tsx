@@ -1,5 +1,5 @@
 import React from 'react';
-import { m } from 'framer-motion';
+import { m, useReducedMotion } from 'framer-motion';
 import { useModalBehavior } from '@/hooks/use-modal-behavior';
 import { normalizeApiBaseUrl } from '@/lib/imageProxy';
 
@@ -31,6 +31,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   errorMessage,
   allowDismiss = false,
 }) => {
+  const reduceMotion = useReducedMotion();
   const modalRef = React.useRef<HTMLDivElement | null>(null);
   const primaryActionRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -54,7 +55,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div
+    <m.div
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.12 }}
       ref={modalRef}
       className="fixed inset-0 z-[200] flex items-center justify-center bg-black"
       role="dialog"
@@ -62,8 +65,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       aria-labelledby="auth-modal-title"
     >
       <m.div
-        initial={{ opacity: 0, y: 30 }}
+        initial={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
         animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: reduceMotion ? 0.12 : 0.22 }}
         className="w-full max-w-md px-8"
       >
         <div className="flex flex-col items-center gap-10">
@@ -79,7 +83,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
 
           <div className="text-center space-y-3">
-            <p className="text-[10px] uppercase tracking-[0.5em] text-white/55 font-bold">Olfactory Intelligence</p>
+            <p className="text-[11px] uppercase tracking-[0.5em] text-white/55 font-bold">Olfactory Intelligence</p>
             <h1 id="auth-modal-title" className="font-serif italic text-4xl sm:text-5xl text-white tracking-tighter leading-tight">
               {title ?? <>Sign in to access<br />your vault</>}
             </h1>
@@ -123,7 +127,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         </div>
       </m.div>
-    </div>
+    </m.div>
   );
 };
 

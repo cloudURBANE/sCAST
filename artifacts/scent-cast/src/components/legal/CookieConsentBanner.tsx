@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router";
-import { m, AnimatePresence } from "framer-motion";
+import { m, AnimatePresence, useReducedMotion } from "framer-motion";
 import { SCENT_EASE_OUT_EXPO } from "@/lib/motion";
 import { Cookie, ShieldCheck, X } from "lucide-react";
 
@@ -28,6 +28,7 @@ import {
 type Mode = "hidden" | "banner" | "manage";
 
 export function CookieConsentBanner() {
+  const reduceMotion = useReducedMotion();
   const [mode, setMode] = React.useState<Mode>("hidden");
 
   // First paint: only surface the banner once, after a calm beat, and only if no
@@ -66,10 +67,10 @@ export function CookieConsentBanner() {
             key="cookie-banner"
             role="region"
             aria-label="Cookie consent"
-            initial={{ opacity: 0, y: 24 }}
+            initial={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 24 }}
-            transition={{ duration: 0.32, ease: SCENT_EASE_OUT_EXPO }}
+            exit={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
+            transition={{ duration: reduceMotion ? 0.12 : 0.22, ease: SCENT_EASE_OUT_EXPO }}
             className="fixed inset-x-0 z-[120] flex justify-center px-[max(0.75rem,env(safe-area-inset-left,0px))] bottom-[max(0.75rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))] md:bottom-6"
           >
             {/* Always-dark surface: ink is pinned to the dark-theme literals so the
@@ -128,14 +129,17 @@ export function CookieConsentBanner() {
         ) : null}
       </AnimatePresence>
 
+      <AnimatePresence>
       {mode === "manage" ? (
         <ConsentManager onClose={() => setMode("hidden")} />
       ) : null}
+      </AnimatePresence>
     </>
   );
 }
 
 function ConsentManager({ onClose }: { onClose: () => void }) {
+  const reduceMotion = useReducedMotion();
   const modalRef = React.useRef<HTMLDivElement | null>(null);
   const saveRef = React.useRef<HTMLButtonElement | null>(null);
   const [analytics, setAnalytics] = React.useState<boolean>(() => readConsent().analytics);
@@ -154,7 +158,9 @@ function ConsentManager({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div
+    <m.div
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.12 }}
       ref={modalRef}
       className="fixed inset-0 z-[200] flex items-end justify-center bg-black/80 px-4 py-4 backdrop-blur-sm sm:items-center"
       role="dialog"
@@ -162,8 +168,9 @@ function ConsentManager({ onClose }: { onClose: () => void }) {
       aria-labelledby="cookie-manager-title"
     >
       <m.div
-        initial={{ opacity: 0, y: 24 }}
+        initial={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
         animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: reduceMotion ? 0.12 : 0.22 }}
         className="scent-consent-surface w-full max-w-lg rounded-[20px] border border-scent-accent/22 bg-[#0b0805]/97 p-5 text-foreground shadow-[0_28px_70px_rgba(0,0,0,0.72)] sm:p-7"
       >
         <div className="flex items-start justify-between gap-4">
@@ -180,7 +187,7 @@ function ConsentManager({ onClose }: { onClose: () => void }) {
             type="button"
             onClick={onClose}
             aria-label="Close cookie preferences"
-            className="-m-1 inline-flex min-h-10 min-w-10 items-center justify-center rounded-full text-[#bfae98] transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
+            className="-m-1 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-[#bfae98] transition-colors active:bg-white/15 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/45"
           >
             <X size={18} strokeWidth={1.75} aria-hidden="true" />
           </button>
@@ -233,7 +240,7 @@ function ConsentManager({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </m.div>
-    </div>
+    </m.div>
   );
 }
 

@@ -93,7 +93,7 @@ function ReviewArrowButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.025] text-white/42 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22 disabled:cursor-default disabled:opacity-25 disabled:hover:border-white/[0.08] disabled:hover:bg-white/[0.025] disabled:hover:text-white/42"
+      className="flex h-11 w-11 shrink-0 active:bg-white/15 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.025] text-white/42 transition-colors hover:border-scent-accent/32 hover:bg-scent-accent/[0.06] hover:text-scent-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/22 disabled:cursor-default disabled:opacity-25 disabled:hover:border-white/[0.08] disabled:hover:bg-white/[0.025] disabled:hover:text-white/42"
       aria-label={label}
       title={label}
     >

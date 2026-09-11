@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { m, AnimatePresence } from 'framer-motion';
+import { m, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { SCENT_EASE_OUT_EXPO } from '@/lib/motion';
 import { X, Link, Check, Eye, EyeOff, ExternalLink, Search } from 'lucide-react';
 import { BottleImage } from '@/components/BottleImage';
@@ -42,6 +42,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   const [hideImages, setHideImages] = useState(false);
   const [hideImagesBusy, setHideImagesBusy] = useState(false);
   const [shareId, setShareId] = useState<string | null>(null);
+  const reduceMotion = useReducedMotion();
   const modalRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -192,22 +193,23 @@ export const ShareModal: React.FC<ShareModalProps> = ({
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence propagate>
       {isOpen && (
-        <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
+        <m.div exit={{ opacity: 0 }} transition={{ duration: 0.12 }} className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center">
           <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.12 }}
             onClick={onClose}
             className="absolute inset-0 bg-black/90"
           />
           <m.div
             ref={modalRef}
-            initial={{ opacity: 0, y: 40 }}
+            initial={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 40 }}
-            transition={{ duration: 0.25, ease: SCENT_EASE_OUT_EXPO }}
+            exit={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
+            transition={{ duration: reduceMotion ? 0.12 : 0.22, ease: SCENT_EASE_OUT_EXPO }}
             className="relative w-full sm:max-w-lg mx-0 sm:mx-6 bg-neutral-950 border-t sm:border border-white/10 sm:rounded-[1.5rem] overflow-hidden shadow-2xl flex flex-col"
             style={{ maxHeight: '90dvh' }}
             role="dialog"
@@ -217,10 +219,10 @@ export const ShareModal: React.FC<ShareModalProps> = ({
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-white/5 shrink-0">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-1.5 h-1.5 rounded-full bg-scent-accent animate-pulse shrink-0" />
+                <div className="w-1.5 h-1.5 rounded-full bg-scent-accent shrink-0" />
                 <div className="min-w-0">
-                  <p id="share-modal-title" className="text-[9px] uppercase tracking-[0.5em] text-scent-accent font-bold">Share Vault</p>
-                  <p className="text-[9px] text-white/40 mt-0.5 font-sans">
+                  <p id="share-modal-title" className="text-[11px] uppercase tracking-[0.5em] text-scent-accent font-bold">Share Vault</p>
+                  <p className="text-[11px] text-white/40 mt-0.5 font-sans">
                     {visibleCount} of {items.length} visible
                   </p>
                 </div>
@@ -229,23 +231,23 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 type="button"
                 onClick={onClose}
                 aria-label="Close share options"
-                className="inline-flex min-h-11 min-w-11 items-center justify-center bg-white/5 hover:bg-white/10 transition-colors rounded-full border border-white/10 text-white group shrink-0 ml-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center bg-white/5 active:bg-white/15 hover:bg-white/10 transition-colors rounded-full border border-white/10 text-white group shrink-0 ml-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
-                <X size={16} strokeWidth={1.75} className="group-hover:rotate-90 transition-transform duration-300" />
+                <X size={16} strokeWidth={1.75} aria-hidden="true" />
               </button>
             </div>
 
             {/* Link row */}
             <div className="px-6 py-4 shrink-0 space-y-3 border-b border-white/5">
               <div className="flex gap-2">
-                <div className="flex-1 bg-white/[0.03] border border-white/10 px-4 py-3 text-[10px] text-white/40 font-mono truncate select-all">
+                <div className="flex-1 bg-white/[0.03] border border-white/10 px-4 py-3 text-[11px] text-white/40 font-mono truncate select-all">
                   {shareUrl || '—'}
                 </div>
                 <button
                   type="button"
                   onClick={() => void handleCopy()}
                   disabled={!shareUrl}
-                  className="px-4 py-3 bg-white text-black text-[9px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 hover:bg-white/90 active:scale-[0.97] transition-[background-color,opacity,transform] shrink-0 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
+                  className="px-4 py-3 bg-white text-black text-[11px] uppercase tracking-[0.3em] font-bold flex items-center gap-2 hover:bg-white/90 active:scale-[0.97] transition-[background-color,opacity,transform] shrink-0 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-950"
                 >
                   {copied ? <><Check size={11} strokeWidth={1.75} /> Copied</> : <><Link size={11} strokeWidth={1.75} /> Copy</>}
                 </button>
@@ -255,7 +257,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                   href={shareUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/50 hover:text-white hover:border-white/20 transition-colors text-[9px] uppercase tracking-[0.35em] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/50 hover:text-white hover:border-white/20 transition-colors text-[11px] uppercase tracking-[0.35em] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 >
                   <ExternalLink size={10} strokeWidth={1.75} />
                   Preview Shared Page
@@ -263,7 +265,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               ) : (
                 <span
                   aria-disabled="true"
-                  className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/25 text-[9px] uppercase tracking-[0.35em] font-bold"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 border border-white/8 text-white/25 text-[11px] uppercase tracking-[0.35em] font-bold"
                 >
                   <ExternalLink size={10} strokeWidth={1.75} />
                   Preview Unavailable
@@ -273,7 +275,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                 type="button"
                 onClick={() => void handleToggleImagesOnSharePage()}
                 disabled={!authToken || hideImagesBusy}
-                className="w-full py-2.5 border border-white/8 bg-white/[0.02] disabled:opacity-45 disabled:cursor-not-allowed text-[9px] uppercase tracking-[0.3em] font-bold transition-[color,border-color,opacity] flex items-center justify-center gap-2 text-white/70 hover:text-white hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                className="w-full py-2.5 border border-white/8 bg-white/[0.02] disabled:opacity-45 disabled:cursor-not-allowed text-[11px] uppercase tracking-[0.3em] font-bold transition-[color,border-color,opacity] flex items-center justify-center gap-2 text-white/70 hover:text-white hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
                 {hideImages ? <EyeOff size={11} strokeWidth={1.75} /> : <Eye size={11} strokeWidth={1.75} />}
                 {hideImages ? 'Shared images hidden' : 'Shared images visible'}
@@ -285,12 +287,12 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               {/* Section header + search */}
               <div className="px-6 py-4 shrink-0 space-y-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-[9px] uppercase tracking-[0.4em] text-white/45 font-bold">Cologne Visibility</p>
+                  <p className="text-[11px] uppercase tracking-[0.4em] text-white/45 font-bold">Cologne Visibility</p>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={handleShowAll}
-                      className="-my-2 inline-flex min-h-11 items-center rounded-sm px-1 text-[9px] uppercase tracking-[0.3em] text-white/45 hover:text-white/80 transition-colors font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                      className="-my-2 inline-flex min-h-11 items-center rounded-sm px-1 text-[11px] uppercase tracking-[0.3em] text-white/45 hover:text-white/80 transition-colors font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                     >
                       Show All
                     </button>
@@ -298,7 +300,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                     <button
                       type="button"
                       onClick={handleHideAll}
-                      className="-my-2 inline-flex min-h-11 items-center rounded-sm px-1 text-[9px] uppercase tracking-[0.3em] text-white/45 hover:text-white/80 transition-colors font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                      className="-my-2 inline-flex min-h-11 items-center rounded-sm px-1 text-[11px] uppercase tracking-[0.3em] text-white/45 hover:text-white/80 transition-colors font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                     >
                       Hide All
                     </button>
@@ -370,7 +372,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
 
                       {/* Name */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-[9px] uppercase tracking-[0.3em] text-white/30 font-bold truncate">{item.brand}</p>
+                        <p className="text-[11px] uppercase tracking-[0.3em] text-white/30 font-bold truncate">{item.brand}</p>
                         <p className={`font-serif italic text-base leading-tight truncate transition-colors ${isHidden ? 'text-white/30' : 'text-white'}`}>
                           {item.name}
                         </p>
@@ -379,7 +381,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
                       {/* Toggle */}
                       <div className="shrink-0 ml-2">
                         {isPending ? (
-                          <div className="w-4 h-4 border border-white/20 border-t-white/60 rounded-full animate-spin" />
+                          <div className="w-4 h-4 border border-white/20 border-t-white/60 rounded-full motion-safe:animate-spin" />
                         ) : isHidden ? (
                           <EyeOff size={15} strokeWidth={1.75} className="text-white/20 group-hover:text-white/50 transition-colors" />
                         ) : (
@@ -392,7 +394,7 @@ export const ShareModal: React.FC<ShareModalProps> = ({
               </div>
             </div>
           </m.div>
-        </div>
+        </m.div>
       )}
     </AnimatePresence>
   );

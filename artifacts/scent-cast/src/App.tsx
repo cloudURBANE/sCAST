@@ -129,7 +129,7 @@ const formatSprayCount = (sprayCount: ScentWeatherRecommendation['spray_count'])
 const PAGE_TRANSITION_TIMING = {
   standard: {
     coverMs: 96,
-    minShowMs: 360,
+    minShowMs: 200,
     postSwapPaintMs: 48,
   },
   lowMotion: {
@@ -1740,9 +1740,9 @@ function GlobalModals() {
   return (
     <>
       {guestBanner}
-      {authModal}
-      {shareModal}
-      {profileModal}
+      <AnimatePresence>{authModal}</AnimatePresence>
+      <AnimatePresence>{shareModal}</AnimatePresence>
+      <AnimatePresence>{profileModal}</AnimatePresence>
     </>
   );
 }

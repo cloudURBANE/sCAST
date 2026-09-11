@@ -327,7 +327,7 @@ export function VaultWithMeSelector({
       <DrawerContent className="flex max-h-[88vh] flex-col border-scent-accent/18 bg-[#090604]/98 px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] text-scent-text-primary backdrop-blur-md">
         <div className="flex shrink-0 justify-end pt-2">
           <DrawerClose asChild>
-            <button type="button" disabled={busy} aria-label="Close With Me" className="rounded-full p-2 text-scent-text-subtle hover:bg-white/10 hover:text-white">
+            <button type="button" disabled={busy} aria-label="Close With Me" className="inline-flex h-11 w-11 items-center justify-center rounded-full p-2 text-scent-text-subtle transition-colors active:bg-white/15 hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
               <X size={17} aria-hidden />
             </button>
           </DrawerClose>
