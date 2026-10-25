@@ -53,7 +53,7 @@ jobs:
 
       # v6: auto-detection limited to npm, but explicit `cache: pnpm` is still
       # honored. pnpm/action-setup above runs first so the store path resolves.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -85,7 +85,7 @@ jobs:
 
       # v6: auto-detection limited to npm, but explicit `cache: pnpm` is still
       # honored. pnpm/action-setup above runs first so the store path resolves.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -179,7 +179,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
 
