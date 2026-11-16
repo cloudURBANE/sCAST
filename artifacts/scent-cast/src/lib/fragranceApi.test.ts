@@ -1121,6 +1121,28 @@ test("searchFragrances falls back to app results when the engine proxy returns 5
   assert.equal(response.results[0]?.origin, "app");
 });
 
+test("searchFragrances falls back to the bundled catalog when both remote searches fail", async (t) => {
+  const previousFetch = globalThis.fetch;
+  const previousApi = process.env.VITE_API_BASE_URL;
+  const previousEngine = process.env.VITE_FRAGRANCE_API_URL;
+  delete process.env.VITE_API_BASE_URL;
+  delete process.env.VITE_FRAGRANCE_API_URL;
+  globalThis.fetch = async () => new Response('<!doctype html><title>offline</title>', {
+    status: 200,
+    headers: { 'Content-Type': 'text/html' },
+  });
+  t.after(() => {
+    globalThis.fetch = previousFetch;
+    if (previousApi === undefined) delete process.env.VITE_API_BASE_URL; else process.env.VITE_API_BASE_URL = previousApi;
+    if (previousEngine === undefined) delete process.env.VITE_FRAGRANCE_API_URL; else process.env.VITE_FRAGRANCE_API_URL = previousEngine;
+  });
+
+  const response = await searchFragrances('Dior Sauvage');
+  assert.equal(response.results[0]?.name, 'Sauvage');
+  assert.equal(response.results[0]?.origin, 'bundled');
+  assert.equal(response.diagnostics?.fallback_source, 'bundled-catalog');
+});
+
 test("searchFragrances does not cache a degraded/fallback-sourced response (refetches to self-heal)", async (t) => {
   const previousFetch = globalThis.fetch;
   const previousApiUrl = process.env.VITE_FRAGRANCE_API_URL;

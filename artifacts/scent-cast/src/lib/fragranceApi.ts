@@ -33,7 +33,7 @@ const SEARCH_RANK_IGNORED_TOKENS = new Set([
   "toilette",
 ]);
 
-export type FragranceSearchOrigin = "srt" | "app";
+export type FragranceSearchOrigin = "srt" | "app" | "bundled";
 
 export type FragranceSearchDiagnostics = {
   result_count?: number;
@@ -145,6 +145,16 @@ type FragranceSearchCacheEntry = {
 };
 
 type FragranceSearchCache = Record<string, FragranceSearchCacheEntry>;
+
+// Continuity catalog for the public vault search while both remote search
+// services are down. Live engine and API results always win over these entries.
+const BUNDLED_FRAGRANCES = [
+  ['Sauvage', 'Dior'], ['Bleu de Chanel', 'Chanel'], ['Aventus', 'Creed'],
+  ['Baccarat Rouge 540', 'Maison Francis Kurkdjian'], ['Santal 33', 'Le Labo'],
+  ['Oud Wood', 'Tom Ford'], ['Side Effect', 'Initio'], ['Boss Bottled Pacific', 'Hugo Boss'],
+  ['Egoiste Platinum', 'Chanel'], ['Parfum des Merveilles', 'Hermes'],
+  ['Coco Mademoiselle', 'Chanel'],
+] as const;
 
 export type EnrichmentStatus =
   | "not_needed"
@@ -1614,6 +1624,25 @@ export async function searchFragrances(
   return response;
 }
 
+function searchBundledFragrances(query: string): FragranceSearchResponse {
+  const results = BUNDLED_FRAGRANCES.map(([name, house]) => ({
+    id: `dataset:${encodeURIComponent(house)}::${encodeURIComponent(name)}`,
+    name,
+    house,
+    brand: house,
+    origin: 'bundled' as const,
+  })).filter((result) => hasDisplayableSearchIdentity(query, result));
+
+  return {
+    query,
+    results: rankSearchResultsByQuery(query, results),
+    diagnostics: {
+      fallback_source: 'bundled-catalog',
+      warning: 'Live fragrance search is temporarily unavailable; showing built-in profiles.',
+    },
+  };
+}
+
 async function executeFragranceSearch(
   query: string,
   options?: { signal?: AbortSignal },
@@ -1636,9 +1665,13 @@ async function executeFragranceSearch(
     );
 
     if (res.status >= 500) {
-      return allowAppSearch
-        ? await searchAppFragrances(requestQuery, options, query)
-        : { query, results: [] };
+      if (!allowAppSearch) return { query, results: [] };
+      try {
+        return await searchAppFragrances(requestQuery, options, query);
+      } catch (fallbackErr) {
+        if (fallbackErr instanceof Error && fallbackErr.name === "AbortError") throw fallbackErr;
+        return searchBundledFragrances(query);
+      }
     }
 
     if (!res.ok) {
@@ -1657,6 +1690,7 @@ async function executeFragranceSearch(
         return await searchAppFragrances(requestQuery, options, query);
       } catch (fallbackErr) {
         if (fallbackErr instanceof Error && fallbackErr.name === "AbortError") throw fallbackErr;
+        return searchBundledFragrances(query);
       }
     }
     throw err;

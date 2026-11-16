@@ -724,7 +724,9 @@ export const FragranceCapture: React.FC<{
     if (!selectedMatch || !onAdd) return;
 
     const selected = selectedMatch;
-    if (selected.scent_vector) {
+    // Bundled results are self-contained, so an API outage cannot turn a
+    // successful offline search into a failed add-to-vault flow.
+    if (selected.scent_vector || selected.origin === 'bundled') {
       setUploading(true);
       setLoadingSurface('sync');
       setLoadingStatus("Syncing to Vault...");

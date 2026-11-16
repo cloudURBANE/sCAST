@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from './AuthContext';
+import { fetchOpenMeteoWeather } from '@/lib/openMeteoWeather';
 
 /** One normalized forecast day from the backend `/api/weather` payload. */
 export interface WeatherForecastDay {
@@ -161,28 +162,35 @@ export const WeatherProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const seq = fetchSeqRef.current + 1;
     fetchSeqRef.current = seq;
     setWeatherLoading(true);
+    const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
 
     try {
-      const hasCoords = Number.isFinite(lat) && Number.isFinite(lon);
       const url = hasCoords
         ? `/api/weather?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}`
         : '/api/weather';
       const response = await fetch(url, { signal });
-      if (!response.ok) {
-        throw new Error(`Weather request failed with ${response.status}`);
-      }
-      const data = (await response.json()) as WeatherData;
+      const data = response.ok
+        ? (await response.json()) as WeatherData
+        : await fetchOpenMeteoWeather(lat, lon, signal);
       if (fetchSeqRef.current !== seq) return;
       setLocationSource(source ?? (hasCoords ? 'preferred' : 'fallback'));
       setWeather(data);
     } catch (err) {
       if (!(err instanceof DOMException && err.name === 'AbortError') && fetchSeqRef.current === seq) {
-        console.error("Failed to fetch weather", err);
-        toast({
-          title: "Weather Unreachable",
-          description: "Failed to load current weather conditions. Using default fallback profiles.",
-          variant: "destructive",
-        });
+        try {
+          const fallback = await fetchOpenMeteoWeather(lat, lon, signal);
+          if (fetchSeqRef.current !== seq) return;
+          setLocationSource(source ?? (hasCoords ? 'preferred' : 'fallback'));
+          setWeather(fallback);
+        } catch (fallbackErr) {
+          if (fallbackErr instanceof DOMException && fallbackErr.name === 'AbortError') return;
+          console.error("Failed to fetch weather", err, fallbackErr);
+          toast({
+            title: "Weather Unreachable",
+            description: "Failed to load current weather conditions. Using default fallback profiles.",
+            variant: "destructive",
+          });
+        }
       }
     } finally {
       if (fetchSeqRef.current === seq) setWeatherLoading(false);
