@@ -825,7 +825,7 @@ export const WeeklyOutlookDashboard: React.FC<WeeklyOutlookDashboardProps> = ({
       {/* ~7% smaller again (design review): the search headline is the page-
           level invitation, this is a SECTION title — the two serif registers
           need clearer separation so the page has one heading system. */}
-      <h2 className="forecast-title font-serif italic text-[clamp(1.15rem,4.1vw,1.4rem)] tracking-normal leading-none text-[#fff7ec] sm:text-[clamp(1.35rem,2.15vw,1.6rem)]">
+      <h2 className="forecast-title font-serif italic text-[clamp(1.25rem,4.5vw,1.55rem)] tracking-normal leading-none text-[#fff7ec] sm:text-[clamp(1.45rem,2.3vw,1.7rem)]">
         Scent Forecast
       </h2>
 

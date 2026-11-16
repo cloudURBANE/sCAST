@@ -2512,7 +2512,6 @@ export const Wardrobe: React.FC<{
                       className="mt-5 inline-flex min-h-12 w-full max-w-sm items-center justify-center gap-3 rounded-full bg-scent-accent px-5 py-3 text-sm font-semibold text-[#17130a] transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background sm:w-auto"
                     >
                       Add your first fragrance
-                      <ArrowRight size={17} strokeWidth={1.75} aria-hidden />
                     </button>
                   )}
                   <p className="mt-2 text-xs leading-5 text-scent-text-subtle">Search by fragrance or brand.</p>

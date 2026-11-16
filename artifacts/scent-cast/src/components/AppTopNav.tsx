@@ -208,6 +208,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
   // (the "double-tap" bug). Keeping the bar visible whenever the user is at
   // rest guarantees a single tap always activates navigation.
   const [navVisible, setNavVisible] = React.useState(true);
+  const [footerLogoVisible, setFooterLogoVisible] = React.useState(false);
   const lastScrollYRef = React.useRef(0);
   // Reveals the bar a beat after scrolling SETTLES (not an idle-hide). The old
   // timer hid the bar at rest — the inverse of the intent — which is what caused
@@ -292,6 +293,18 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
     };
   }, []);
 
+  React.useEffect(() => {
+    const footerLogo = document.querySelector<HTMLElement>('[data-footer-brand-logo="true"]');
+    if (!footerLogo || typeof IntersectionObserver === 'undefined') return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setFooterLogoVisible(entry.isIntersecting),
+      { threshold: 0.1 },
+    );
+    observer.observe(footerLogo);
+    return () => observer.disconnect();
+  }, [location.pathname]);
+
   // Navigating to a new route must never land the user on a hidden bar.
   React.useEffect(() => {
     setNavVisible(true);
@@ -354,9 +367,9 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
 
           {/* Column 2: logo, centered on every breakpoint. Two sizes — the
               compact mobile lockup and the larger desktop/iPad one. */}
-          <div className="flex items-center justify-center md:justify-self-center">
+          <div className={`flex items-center justify-center transition-opacity duration-300 md:justify-self-center ${footerLogoVisible ? 'pointer-events-none opacity-0' : 'opacity-100'}`}>
             <h1 className="leading-none md:hidden">
-              <Link to="/" aria-label="Go to home" className="block">
+              <Link to="/" aria-label="Go to home" aria-hidden={footerLogoVisible} tabIndex={footerLogoVisible ? -1 : undefined} className="block">
                 <img
                   src="/nav/scentbeam-nav-logo.png"
                   srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
@@ -367,7 +380,7 @@ export const AppTopNav: React.FC<AppTopNavProps> = ({
                 />
               </Link>
             </h1>
-            <Link to="/" aria-label="Go to home" className="hidden md:block">
+            <Link to="/" aria-label="Go to home" aria-hidden={footerLogoVisible} tabIndex={footerLogoVisible ? -1 : undefined} className="hidden md:block">
               <img
                 src="/nav/scentbeam-nav-logo.png"
                 srcSet="/nav/scentbeam-nav-logo.png 1x, /nav/scentbeam-nav-logo@2x.png 2x"
