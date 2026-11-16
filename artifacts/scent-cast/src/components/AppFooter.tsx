@@ -32,13 +32,13 @@ export const AppFooter: React.FC<{
 
   return (
     <footer
-      className={`relative z-10 border-t border-scent-accent/10 px-6 ${showExploreLinks ? "bg-scent-surface/20 py-6 sm:py-8" : "py-14"} ${className}`.trim()}
+      className={`relative z-10 border-t border-scent-accent/10 px-4 sm:px-6 ${showExploreLinks ? "bg-scent-surface/20 py-6 sm:py-8" : "py-10 sm:py-12"} ${className}`.trim()}
     >
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto flex max-w-6xl flex-col items-center text-center">
         <div
-          className={`flex flex-col gap-4 ${showExploreLinks ? "pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:pb-5" : "items-center pb-8 text-center"}`}
+          className={`flex w-full flex-col items-center gap-4 ${showExploreLinks ? "pb-5 sm:pb-6" : "pb-6 sm:pb-8"}`}
         >
-          <div className={showExploreLinks ? "max-w-sm" : ""}>
+          <div className="flex w-full justify-center">
             <Link
               to="/"
               aria-label="Go to home"
@@ -49,20 +49,20 @@ export const AppFooter: React.FC<{
                 width={640}
                 height={188}
                 alt={APP_BRAND_MARK}
-                className={`${showExploreLinks ? "w-[150px] sm:w-[180px]" : "w-[200px]"} h-auto max-w-full object-contain`}
+                className={`${showExploreLinks ? "w-[160px] sm:w-[180px]" : "w-[180px] sm:w-[200px]"} h-auto max-w-full object-contain`}
                 draggable={false}
               />
             </Link>
 
           </div>
           {showExploreLinks ? (
-            <div className="hidden md:block">
+            <div className="w-full">
               <p className="scent-type-label mb-2 text-scent-accent">
                 Explore ScentBeam
               </p>
               <nav
                 aria-label="Explore ScentBeam"
-                className="flex flex-wrap gap-x-6 gap-y-1"
+                className="flex flex-wrap justify-center gap-x-6 gap-y-1"
               >
                 <Link to="/" className={footerLinkClassName}>
                   Home
@@ -78,10 +78,10 @@ export const AppFooter: React.FC<{
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-scent-accent/10 pt-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex w-full flex-col items-center gap-3 border-t border-scent-accent/10 pt-4">
           <nav
             aria-label="Legal"
-            className={`flex flex-wrap items-center gap-x-5 gap-y-1 ${showExploreLinks ? "" : "justify-center"}`}
+            className="flex w-full flex-wrap items-center justify-center gap-x-2 gap-y-1 sm:gap-x-4"
           >
             {legalLinks.map((link) => (
               <Link key={link.to} to={link.to} className={footerLinkClassName}>
@@ -97,7 +97,7 @@ export const AppFooter: React.FC<{
             </button>
           </nav>
 
-          <p className="text-[11px] leading-5 text-scent-text-subtle">
+          <p className="text-center text-[11px] leading-5 text-scent-text-subtle">
             © {new Date().getFullYear()} Olfactory Intelligence Systems
           </p>
         </div>

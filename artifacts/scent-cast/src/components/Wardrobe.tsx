@@ -2497,22 +2497,19 @@ export const Wardrobe: React.FC<{
             </div>
           ) : (
             <section aria-labelledby="vault-welcome-title" className="scent-onboarding-card mx-auto w-full max-w-4xl overflow-hidden rounded-[var(--radius-scent)] border border-scent-accent/20">
-              <div className="grid gap-6 p-5 sm:grid-cols-[1.15fr_1fr] sm:items-center sm:gap-10 sm:p-8">
-                <div className="min-w-0">
-                  <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/25 bg-scent-accent/[0.06] text-scent-accent" aria-hidden="true">
-                    <Sparkles size={19} strokeWidth={1.5} />
-                  </div>
+              <div className="flex flex-col items-center gap-6 p-5 text-center sm:gap-8 sm:p-8">
+                <div className="flex w-full flex-col items-center">
                   <h3 id="vault-welcome-title" className="font-serif italic text-3xl leading-tight text-foreground sm:text-4xl">
                     Your collection starts here.
                   </h3>
-                  <p className="mt-2 max-w-sm text-sm leading-6 text-scent-text-muted">
+                  <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-scent-text-muted">
                     Add a favorite to explore its notes. With three bottles, unlock your daily scent forecast.
                   </p>
                   {onExpandArchive && (
                     <button
                       type="button"
                       onClick={() => onExpandArchive({ target: 'vault' })}
-                      className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-3 rounded-full bg-scent-accent px-5 py-3 text-sm font-semibold text-[#17130a] transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background sm:w-auto"
+                      className="mt-5 inline-flex min-h-12 w-full max-w-sm items-center justify-center gap-3 rounded-full bg-scent-accent px-5 py-3 text-sm font-semibold text-[#17130a] transition-opacity hover:opacity-90 active:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent focus-visible:ring-offset-4 focus-visible:ring-offset-background sm:w-auto"
                     >
                       Add your first fragrance
                       <ArrowRight size={17} strokeWidth={1.75} aria-hidden />
@@ -2520,7 +2517,7 @@ export const Wardrobe: React.FC<{
                   )}
                   <p className="mt-2 text-xs leading-5 text-scent-text-subtle">Search by fragrance or brand.</p>
                 </div>
-                <VaultDiscoveryProgress count={vaultCount} variant="banner" className="w-full" />
+                <VaultDiscoveryProgress count={vaultCount} variant="banner" className="mx-auto w-full max-w-2xl" />
               </div>
               <details className="group border-t border-scent-accent/15">
                 <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-sm font-medium text-scent-text-muted transition-colors hover:text-scent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-scent-accent sm:px-8 [&::-webkit-details-marker]:hidden">
