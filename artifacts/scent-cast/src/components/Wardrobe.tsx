@@ -2395,20 +2395,23 @@ export const Wardrobe: React.FC<{
             />
           ) : null}
           {wardrobeError ? (
-            /* Shared error surface (arena.tsx uses the same recipe) so failure
-               states speak one visual language app-wide; the classes also carry
-               the light-theme ink flip the old white/90-on-white box lacked. */
-            <div role="alert" className="mx-auto w-full max-w-xl py-16">
-              <div className="scent-error-panel rounded-[var(--radius-scent)] border p-6 text-center">
-                <p className="font-serif italic text-2xl">Olfactory Vault Synchronization Offline</p>
-                <p className="scent-error-body mt-3 text-sm leading-6">{wardrobeError}</p>
+            /* A low-noise, accent-framed status card keeps a temporary sync
+               failure legible without making the whole vault feel broken. */
+            <div role="alert" className="mx-auto w-full max-w-xl py-8 sm:py-12">
+              <div className="rounded-[var(--radius-scent)] border border-scent-accent/18 bg-scent-accent/[0.035] p-5 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.05)] sm:p-7">
+                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-scent-accent/20 bg-scent-accent/[0.07] text-scent-accent">
+                  <RefreshCw aria-hidden="true" className="h-4 w-4" />
+                </div>
+                <p className="scent-type-label text-xs">Vault status</p>
+                <p className="mt-2 font-serif text-balance text-xl text-foreground sm:text-2xl">Your collection is temporarily unavailable</p>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-scent-text-secondary">{wardrobeError}</p>
                 {onRetryLoadWardrobe && (
                   <button
                     type="button"
                     onClick={onRetryLoadWardrobe}
-                    className="scent-error-action mt-5 inline-flex min-h-11 items-center justify-center rounded-full px-5 py-2 scent-type-chip focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                    className="mt-5 inline-flex min-h-11 items-center justify-center rounded-full border border-scent-accent/30 bg-scent-accent/[0.08] px-5 py-2 scent-type-chip text-scent-accent transition-colors hover:bg-scent-accent/[0.14] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-scent-accent/60"
                   >
-                    Retry Load
+                    Try again
                   </button>
                 )}
               </div>

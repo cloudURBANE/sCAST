@@ -1510,12 +1510,9 @@ export const WardrobeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         console.error("Failed to load wardrobe", err);
-        setWardrobeError((err as Error).message || "Check your internet connection.");
-        toast({
-          title: "Synchronization Error",
-          description: "Could not fetch your latest wardrobe. Check your internet connection.",
-          variant: "destructive"
-        });
+        // Keep transport/parser details in diagnostics, while the persistent
+        // vault status card gives users one calm, actionable recovery path.
+        setWardrobeError("We couldn't refresh your collection right now. Please try again shortly.");
       }
     } finally {
       setWardrobeLoaded(true);
