@@ -222,7 +222,7 @@ const CompactBattlePostCard: React.FC<PostCardProps> = ({
     <article
       aria-labelledby={title ? headingId : undefined}
       aria-label={title ? undefined : `Battle by ${authorName}`}
-      className="scent-night-panel mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:p-6"
+      className="scent-night-panel mx-auto w-full max-w-[1080px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left shadow-[inset_0_1px_0_rgba(255,236,183,0.06)] sm:p-6"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
@@ -324,7 +324,7 @@ const CompactQuestionPostCard: React.FC<PostCardProps> = ({
     <article
       aria-labelledby={title ? headingId : undefined}
       aria-label={title ? undefined : `Question by ${authorName}`}
-      className="scent-night-panel mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-6"
+      className="scent-night-panel mx-auto w-full max-w-[1080px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-6"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -626,7 +626,7 @@ const ScentOfDayPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="scent-night-panel mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-6"
+      className="scent-night-panel mx-auto w-full max-w-[1080px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-6"
     >
       <header className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -784,7 +784,7 @@ const StandardPostCard: React.FC<PostCardProps> = ({
   return (
     <article
       aria-labelledby={headingId}
-      className="scent-night-panel mx-auto w-full max-w-[940px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-6"
+      className="scent-night-panel mx-auto w-full max-w-[1080px] overflow-hidden rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/34 bg-[#050403] p-4 text-left sm:p-6"
     >
       <header className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
         <div className="flex min-w-0 items-center gap-4 sm:gap-5">

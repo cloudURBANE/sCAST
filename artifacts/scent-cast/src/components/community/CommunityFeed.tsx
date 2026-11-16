@@ -165,7 +165,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     return (
       <div
         role="alert"
-        className="scent-error-panel mx-auto w-full max-w-[940px] rounded-[calc(var(--radius-scent)+2px)] border p-6 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]"
+        className="scent-error-panel mx-auto w-full max-w-[1080px] rounded-[calc(var(--radius-scent)+2px)] border p-6 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]"
       >
         <p className="font-serif text-xl italic">The feed could not load.</p>
         <p className="scent-error-body mt-2 text-sm font-medium">
@@ -187,7 +187,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
     const shouldClearFilters = Boolean(filters.q);
     const { title, body, actionLabel, actionAriaLabel } = emptyStateCopy(filters);
     return (
-      <div className="mx-auto w-full max-w-[940px] rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-scent-surface/46 px-6 py-12 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
+      <div className="mx-auto w-full max-w-[1080px] rounded-[calc(var(--radius-scent)+2px)] border border-scent-accent/18 bg-scent-surface/46 px-6 py-12 text-center shadow-[inset_0_1px_0_rgba(255,236,183,0.04)]">
         <p className="font-serif text-2xl italic text-foreground">{title}</p>
         <p className="mx-auto mt-4 max-w-lg text-base leading-7 text-scent-text-muted">{body}</p>
         <div className="mt-6 flex justify-center">
@@ -231,7 +231,7 @@ export const CommunityFeed: React.FC<CommunityFeedProps> = ({
 
   return (
     <div
-      className="mx-auto w-full max-w-[940px] space-y-5 sm:space-y-6"
+      className="mx-auto w-full max-w-[1080px] space-y-5 sm:space-y-6"
       aria-busy={isRefetching || isFetchingNextPage || isPlaceholderData}
     >
       {/* The server orders rooms createdAt-descending (communityPosts.ts); this

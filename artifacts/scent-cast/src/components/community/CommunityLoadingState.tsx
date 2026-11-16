@@ -9,7 +9,7 @@ export function CommunityLoadingState({
 }: CommunityLoadingStateProps) {
   return (
     <div
-      className={`mx-auto flex w-full max-w-[940px] items-center justify-center ${className}`}
+      className={`mx-auto flex w-full max-w-[1080px] items-center justify-center ${className}`}
       role="status"
       aria-label={label}
     >
